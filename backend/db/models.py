@@ -36,6 +36,11 @@ class User(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     audit_logs = relationship("AuditLog", back_populates="user")
+    sales = relationship(
+        "Sale",
+        back_populates="cashier",
+        foreign_keys="Sale.user_id",
+    )
 
 
 class AuditLog(Base):
@@ -52,3 +57,44 @@ class AuditLog(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     user = relationship("User", back_populates="audit_logs")
+
+
+class Sale(Base):
+    """Persisted pharmacy sale / invoice header."""
+
+    __tablename__ = "sales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    patient_name = Column(String(255), nullable=True)
+    doctor_name = Column(String(255), nullable=True)
+    clinic_name = Column(String(255), nullable=True)
+    total = Column(Float, nullable=False)
+    status = Column(String(32), nullable=False, default="completed", index=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    cashier = relationship("User", back_populates="sales", foreign_keys=[user_id])
+    items = relationship(
+        "SaleItem",
+        back_populates="sale",
+        cascade="all, delete-orphan",
+        order_by="SaleItem.id",
+    )
+
+
+class SaleItem(Base):
+    """One line item on a persisted sale."""
+
+    __tablename__ = "sale_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=False, index=True)
+    medicine_id = Column(String, nullable=True)
+    medicine_name = Column(String(255), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    unit_price = Column(Float, nullable=False)
+    subtotal = Column(Float, nullable=False)
+
+    sale = relationship("Sale", back_populates="items")

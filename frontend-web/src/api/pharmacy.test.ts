@@ -41,6 +41,9 @@ describe('pharmacy API helpers', () => {
     const [, init] = fetchMock.mock.calls[0]
     expect(JSON.parse(init.body)).toEqual({
       medicines: [{ name: 'Aspirin', quantity: 2 }],
+      patient: null,
+      doctor: null,
+      clinic: null,
     })
   })
 })

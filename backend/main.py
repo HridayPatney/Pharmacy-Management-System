@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import auth, health, inventory, ocr_api, search
+from backend.api import auth, health, inventory, ocr_api, sales, search
 from backend.core.bootstrap import bootstrap_admin_if_needed, ensure_schema
 from backend.core.config import get_cors_origins
 from backend.core.errors import register_exception_handlers
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(inventory.router, prefix="/inventory", tags=["Inventory"])
+app.include_router(sales.router, prefix="/sales", tags=["Sales"])
 app.include_router(search.router, prefix="/search", tags=["Vector Search"])
 app.include_router(ocr_api.router, prefix="/ocr", tags=["OCR"])
 

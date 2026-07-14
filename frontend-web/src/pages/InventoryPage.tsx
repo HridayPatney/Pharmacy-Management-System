@@ -28,6 +28,7 @@ export function InventoryPage() {
   const [limit] = useState(10)
   const [q, setQ] = useState('')
   const [lowStockOnly, setLowStockOnly] = useState(false)
+  const [expiryFilter, setExpiryFilter] = useState<'all' | 'expired' | 'soon'>('all')
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<Medicine>(emptyForm)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -42,7 +43,9 @@ export function InventoryPage() {
         limit,
         q: q.trim() || undefined,
         low_stock: lowStockOnly ? 10 : undefined,
-        sort: 'name',
+        expiry: expiryFilter === 'all' ? undefined : expiryFilter,
+        days: 30,
+        sort: expiryFilter === 'all' ? 'name' : 'expiry_date',
         order: 'asc',
       })
       setItems(data.items)
@@ -50,7 +53,7 @@ export function InventoryPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load inventory')
     }
-  }, [token, page, limit, q, lowStockOnly])
+  }, [token, page, limit, q, lowStockOnly, expiryFilter])
 
   useEffect(() => {
     void load()
@@ -98,7 +101,7 @@ export function InventoryPage() {
       <section className="panel stack">
         <div>
           <h1>Inventory</h1>
-          <p className="muted">Search, filter low stock, and manage catalog items.</p>
+          <p className="muted">Search, filter low stock / expiry, and manage catalog items.</p>
         </div>
         {error ? <div className="error-box">{error}</div> : null}
         <div className="row">
@@ -123,6 +126,20 @@ export function InventoryPage() {
                 setLowStockOnly(e.target.checked)
               }}
             />
+          </label>
+          <label>
+            Expiry
+            <select
+              value={expiryFilter}
+              onChange={(e) => {
+                setPage(1)
+                setExpiryFilter(e.target.value as 'all' | 'expired' | 'soon')
+              }}
+            >
+              <option value="all">All</option>
+              <option value="expired">Expired</option>
+              <option value="soon">Expiring ≤30 days</option>
+            </select>
           </label>
         </div>
         <div className="table-wrap">
@@ -149,7 +166,12 @@ export function InventoryPage() {
                     {m.quantity <= 10 ? <span className="badge warn">low</span> : null}
                   </td>
                   <td>{m.price.toFixed(2)}</td>
-                  <td>{m.expiry_date}</td>
+                  <td>
+                    {m.expiry_date}{' '}
+                    {new Date(m.expiry_date) < new Date(new Date().toDateString()) ? (
+                      <span className="badge warn">expired</span>
+                    ) : null}
+                  </td>
                   {writable ? (
                     <td className="row">
                       <button

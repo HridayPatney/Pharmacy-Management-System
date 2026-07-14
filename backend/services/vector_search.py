@@ -1,10 +1,9 @@
 """Chroma-backed embeddings for medicine similarity search.
 
-Chroma and the sentence-transformers embedding function are initialized on
-**first use**, not at import time, so ``uvicorn`` / ``GET /`` stay fast.
+Chroma is initialized on **first use**, not at import time, so ``GET /`` stays fast.
 
-Collection name and storage path come from ``backend.core.config``.
-See ``docs/vector-search.md`` for load timing and reindex notes.
+Uses Chroma's default ONNX MiniLM embedding function (no PyTorch install required).
+See ``docs/vector-search.md``.
 """
 
 from __future__ import annotations
@@ -12,11 +11,7 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-from backend.core.config import (
-    get_chroma_collection_name,
-    get_chroma_path,
-    get_embedding_model_name,
-)
+from backend.core.config import get_chroma_collection_name, get_chroma_path
 
 _lock = threading.Lock()
 _collection: Any | None = None
@@ -35,13 +30,11 @@ def get_collection():
         import chromadb
         from chromadb.utils import embedding_functions
 
-        model_name = get_embedding_model_name()
         client = chromadb.PersistentClient(path=get_chroma_path())
+        # DefaultEmbeddingFunction uses ONNX MiniLM via onnxruntime (bundled with Chroma).
         _collection = client.get_or_create_collection(
             name=get_chroma_collection_name(),
-            embedding_function=embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name
-            ),
+            embedding_function=embedding_functions.DefaultEmbeddingFunction(),
         )
         return _collection
 

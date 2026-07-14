@@ -26,11 +26,20 @@ export function AppLayout() {
           </div>
         </div>
         <nav className="nav">
+          <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Dashboard
+          </NavLink>
           <NavLink to="/inventory" className={({ isActive }) => (isActive ? 'active' : '')}>
             Inventory
           </NavLink>
+          <NavLink to="/billing" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Billing
+          </NavLink>
           <NavLink to="/ocr" className={({ isActive }) => (isActive ? 'active' : '')}>
-            OCR & Invoice
+            OCR
+          </NavLink>
+          <NavLink to="/account" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Account
           </NavLink>
           <button type="button" className="linkish" onClick={logout}>
             Log out

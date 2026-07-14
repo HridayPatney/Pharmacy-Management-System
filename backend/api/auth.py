@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session, joinedload
 
 from backend.core.deps import get_current_user, require_roles
 from backend.core.roles import Role
@@ -65,15 +67,36 @@ def register(
 
 @router.get("/audit", response_model=list[AuditLogOut])
 def list_audit(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
+    action: str | None = Query(None, description="Exact action filter, e.g. inventory.sell"),
+    user_id: int | None = Query(None, description="Filter by acting user id"),
+    date_from: datetime | None = Query(None, description="Inclusive lower bound (UTC)"),
+    date_to: datetime | None = Query(None, description="Inclusive upper bound (UTC)"),
     db: Session = Depends(get_db),
     _: models.User = Depends(require_roles(Role.ADMIN)),
 ):
-    """Return recent audit log entries (admin only)."""
-    limit = min(max(limit, 1), 200)
-    return (
-        db.query(models.AuditLog)
-        .order_by(models.AuditLog.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    """Return filtered audit log entries (admin only)."""
+    query = db.query(models.AuditLog).options(joinedload(models.AuditLog.user))
+    if action:
+        query = query.filter(models.AuditLog.action == action.strip())
+    if user_id is not None:
+        query = query.filter(models.AuditLog.user_id == user_id)
+    if date_from is not None:
+        query = query.filter(models.AuditLog.created_at >= date_from)
+    if date_to is not None:
+        query = query.filter(models.AuditLog.created_at <= date_to)
+
+    rows = query.order_by(models.AuditLog.created_at.desc()).limit(limit).all()
+    return [
+        AuditLogOut(
+            id=row.id,
+            user_id=row.user_id,
+            user_email=row.user.email if row.user else None,
+            action=row.action,
+            entity_type=row.entity_type,
+            entity_id=row.entity_id,
+            details=row.details,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]

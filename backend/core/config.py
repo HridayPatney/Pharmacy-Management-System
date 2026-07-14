@@ -29,10 +29,18 @@ def _env(name: str, default: str | None = None) -> str | None:
 def get_cors_origins() -> list[str]:
     """Return allowed CORS origins from ``CORS_ORIGINS`` (comma-separated).
 
-    Defaults to local Streamlit (``http://localhost:8501``) when unset.
+    Defaults include local Streamlit and React on both localhost and 127.0.0.1
+    (browsers treat those as different origins).
     Use ``*`` only for local experiments; do not deploy with a wildcard.
     """
-    raw = _env("CORS_ORIGINS", "http://localhost:8501") or "http://localhost:8501"
+    raw = _env(
+        "CORS_ORIGINS",
+        "http://localhost:8501,http://127.0.0.1:8501,"
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ) or (
+        "http://localhost:8501,http://127.0.0.1:8501,"
+        "http://localhost:5173,http://127.0.0.1:5173"
+    )
     if raw == "*":
         return ["*"]
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
@@ -94,7 +102,11 @@ def get_chroma_collection_name() -> str:
 
 @lru_cache(maxsize=1)
 def get_embedding_model_name() -> str:
-    """Return the sentence-transformers model name used for embeddings."""
+    """Return the configured embedding model name (informational).
+
+    The live API uses Chroma's default ONNX embedding function; this value is
+    kept for env compatibility and docs.
+    """
     return _env("EMBEDDING_MODEL", "all-MiniLM-L6-v2") or "all-MiniLM-L6-v2"
 
 
