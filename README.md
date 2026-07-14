@@ -102,17 +102,20 @@ docs/             Environment and operational docs
 
 - [Environment variables & secrets](docs/environment.md)
 - [Backend architecture](docs/architecture.md)
+- [Testing](docs/testing.md)
 - [Dependency files](docs/dependencies.md)
 
-## Smoke test
+## Smoke test / pytest
 
-With the venv activated and core API packages installed:
+With the venv activated and API packages installed:
 
 ```bash
 python scripts/smoke_test.py
+# or
+pytest -q
 ```
 
-This checks health, inventory CRUD, and sell invoice shape without loading Chroma/torch.
+See [docs/testing.md](docs/testing.md).
 
 ## Security notes
 

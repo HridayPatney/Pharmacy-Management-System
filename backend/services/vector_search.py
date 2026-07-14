@@ -31,11 +31,13 @@ collection = chroma_client.get_or_create_collection(
 
 
 def add_medicine_to_vector_db(medicine_id, medicine_name, description):
-    """Add or replace a medicine description in the Chroma collection."""
-    try:
+    """Add or replace a medicine description in the Chroma collection.
+
+    Callers (``vector_sync``) are responsible for translating failures into API errors.
+    """
+    existing = collection.get(ids=[medicine_id])
+    if existing and existing.get("ids"):
         collection.delete(ids=[medicine_id])
-    except Exception:
-        pass
 
     collection.add(
         documents=[description or ""],
@@ -45,11 +47,13 @@ def add_medicine_to_vector_db(medicine_id, medicine_name, description):
 
 
 def delete_medicine_from_vector_db(medicine_id):
-    """Remove a medicine from the Chroma vector collection."""
-    try:
+    """Remove a medicine from the Chroma vector collection.
+
+    Missing ids are ignored; other Chroma errors propagate to the caller.
+    """
+    existing = collection.get(ids=[medicine_id])
+    if existing and existing.get("ids"):
         collection.delete(ids=[medicine_id])
-    except Exception:
-        pass
 
 
 def search_similar_medicines(query_text, top_k=5):
