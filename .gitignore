@@ -1,24 +1,33 @@
-# Ignore Python virtual environment
+# Python virtual environments (never commit)
 venv/
-.env
+.venv/
+env/
 
-# Ignore bytecode
+# Local secrets
+.env
+.env.local
+*.pem
+
+# Bytecode / caches
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Ignore database and ChromaDB persistence
+# Database and ChromaDB persistence
 *.sqlite3
 *.db
 chroma_store/
 
-# Ignore logs or temp files
+# Logs and temp
 *.log
 *.tmp
+*.temp
 
-# Ignore IDE settings
+# IDE / OS
 .vscode/
 .idea/
-
-# Mac/Windows OS files
 .DS_Store
 Thumbs.db

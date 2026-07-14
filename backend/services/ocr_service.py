@@ -1,16 +1,24 @@
-import os
-import cv2
+"""Prescription OCR via Gemini, with RxNorm medicine-name validation.
+
+Requires ``GEMINI_API_KEY`` in the environment (see ``docs/environment.md``).
+Response JSON field names are part of the client contract and must not change.
+"""
+
+from __future__ import annotations
+
 import json
+import os
+
+import cv2
 import requests
 from google import genai
 from google.genai import types
 
-# 🛡️ Step 0: Check API Key
-# if not os.environ.get("GEMINI_API_KEY"):
-#     raise EnvironmentError("❌ GEMINI_API_KEY environment variable not set.")
+from backend.core.config import get_gemini_api_key
 
-# 🧼 Step 1: Preprocess Image
+
 def clean_image(input_path: str, output_path: str) -> None:
+    """Preprocess a prescription image (grayscale, threshold, denoise) and save it."""
     image = cv2.imread(input_path, cv2.IMREAD_COLOR)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -24,17 +32,19 @@ def clean_image(input_path: str, output_path: str) -> None:
     denoised = cv2.fastNlMeansDenoising(thresh, h=30)
     cv2.imwrite(output_path, denoised)
 
-# 🌐 Step 2: Validate medicine name via RxNorm API
+
 def is_valid_medicine(name: str) -> bool:
+    """Return True if NIH RxNorm resolves ``name`` to an RxCUI."""
     url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={name}"
     try:
         r = requests.get(url, timeout=3)
         return bool(r.json().get("idGroup", {}).get("rxnormId"))
-    except:
+    except Exception:
         return False
 
-# 🔍 Step 3: Validate and clean extracted JSON
+
 def validate_extracted_data(data: dict) -> dict:
+    """Filter ``Medicines Prescribed`` to names accepted by RxNorm."""
     meds = data.get("Medicines Prescribed", [])
     if meds is None:
         return data
@@ -43,9 +53,14 @@ def validate_extracted_data(data: dict) -> dict:
     data["Medicines Prescribed"] = valid_meds if valid_meds else None
     return data
 
-# 🤖 Step 4: Extract JSON from Gemini
+
 def extract_json(image_path: str) -> dict:
-    client = genai.Client(api_key="AIzaSyBatNYZ5hVjHFBcIc5OdWwMU3yC0oBICvw")
+    """Upload ``image_path`` to Gemini and return structured prescription fields.
+
+    Returns a dict with keys: Patient's Name, Medicines Prescribed, Doctor's Name,
+    Clinic Name, Date. Medicine names are filtered through RxNorm when possible.
+    """
+    client = genai.Client(api_key=get_gemini_api_key())
     file = client.files.upload(file=image_path)
 
     model = "gemini-2.0-flash-exp"
@@ -61,7 +76,6 @@ def extract_json(image_path: str) -> dict:
         )
     ]
 
-    # Structured prompt
     generate_content_config = types.GenerateContentConfig(
         temperature=1,
         top_p=0.95,
@@ -99,23 +113,23 @@ Strictly return a JSON object. Do not include any explanation or markdown.
         data = json.loads(extracted_text)
         return validate_extracted_data(data)
     except json.JSONDecodeError as e:
-        print("❌ Gemini returned invalid JSON:\n")
+        print("Gemini returned invalid JSON:\n")
         print(extracted_text)
-        raise ValueError(f"JSON parse error: {str(e)}")
+        raise ValueError(f"JSON parse error: {str(e)}") from e
 
-# 🚀 Step 5: Full pipeline test
+
 if __name__ == "__main__":
     input_img = "image.png"
     cleaned_img = "cleaned_newest.png"
 
     if not os.path.exists(input_img):
-        print(f"❌ Image not found: {input_img}")
+        print(f"Image not found: {input_img}")
     else:
-        print("🧼 Cleaning image...")
+        print("Cleaning image...")
         clean_image(input_img, cleaned_img)
 
-        print("📤 Sending to Gemini...")
+        print("Sending to Gemini...")
         result = extract_json(cleaned_img)
 
-        print("\n✅ Final Extracted and Validated Data:\n")
+        print("\nFinal Extracted and Validated Data:\n")
         print(json.dumps(result, indent=2))
