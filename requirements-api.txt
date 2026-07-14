@@ -1,0 +1,15 @@
+# PharmaAssist API dependencies (inventory, search, OCR)
+# Install: pip install -r requirements-api.txt
+
+fastapi==0.115.13
+uvicorn[standard]==0.34.3
+SQLAlchemy==2.0.41
+pydantic==2.11.7
+python-dotenv==1.1.1
+python-multipart==0.0.20
+requests==2.32.4
+chromadb==1.0.13
+sentence-transformers==4.1.0
+google-genai==1.22.0
+opencv-python==4.11.0.86
+numpy==2.3.1

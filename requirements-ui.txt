@@ -1,0 +1,9 @@
+# PharmaAssist Streamlit UI dependencies
+# Install: pip install -r requirements-ui.txt
+# Assumes the API is reachable (default http://localhost:8000).
+
+streamlit==1.46.0
+requests==2.32.4
+pandas==2.3.0
+plotly==6.1.2
+fpdf==1.7.2

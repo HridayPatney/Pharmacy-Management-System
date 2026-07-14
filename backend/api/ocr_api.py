@@ -1,4 +1,4 @@
-# backend/api/ocr_api.py
+"""HTTP routes for prescription image OCR."""
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from backend.services.ocr_service import extract_json
@@ -6,10 +6,11 @@ import tempfile
 
 router = APIRouter()
 
+
 @router.post("/extract")
 async def extract(file: UploadFile = File(...)):
+    """Accept an uploaded prescription image and return structured JSON fields."""
     try:
-        # Save image temporarily
         suffix = file.filename.split(".")[-1]
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp:
             contents = await file.read()
