@@ -83,8 +83,15 @@ def vector_mocks() -> MagicMock:
 def client(tmp_path, monkeypatch, vector_mocks):
     """FastAPI ``TestClient`` bound to an isolated temp SQLite database."""
     db_path = tmp_path / "test.db"
+    upload_dir = tmp_path / "uploads"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
     monkeypatch.setenv("JWT_SECRET", "test-jwt-secret-not-for-production")
+    # Never inherit production S3 settings from a developer ``.env``.
+    monkeypatch.setenv("STORAGE_BACKEND", "local")
+    monkeypatch.setenv("UPLOAD_DIR", str(upload_dir))
+    monkeypatch.delenv("S3_BUCKET", raising=False)
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
 
     import backend.core.config as config
     import backend.db.database as database
