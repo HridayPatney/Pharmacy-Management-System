@@ -6,12 +6,17 @@ PharmaAssist loads configuration from the process environment and optionally fro
 
 | Name | Required | Default | Purpose |
 |------|----------|---------|---------|
+| `JWT_SECRET` | Yes | _(none)_ | Signs access tokens |
+| `JWT_EXPIRE_MINUTES` | No | `60` | Access token lifetime |
+| `BOOTSTRAP_ADMIN_EMAIL` | First boot | _(none)_ | Seed admin when users table empty |
+| `BOOTSTRAP_ADMIN_PASSWORD` | First boot | _(none)_ | Seed admin password |
 | `GEMINI_API_KEY` | Yes for OCR | _(none)_ | Google Gemini API key used by `POST /ocr/extract` |
 | `CORS_ORIGINS` | No | `http://localhost:8501` | Comma-separated allowed origins for the FastAPI CORS middleware |
-| `DATABASE_URL` | No | `sqlite:///<repo>/pharma.db` | SQLAlchemy URL (CWD-independent default) |
+| `DATABASE_URL` | No | `sqlite:///<repo>/pharma.db` | SQLAlchemy URL (Render Postgres in production) |
 | `CHROMA_PATH` | No | `<repo>/chroma_store` | Persistent Chroma directory |
 | `CHROMA_COLLECTION` | No | `medicine_embeddings` | Chroma collection name |
 | `EMBEDDING_MODEL` | No | `all-MiniLM-L6-v2` | Sentence-transformers model for embeddings |
+| `S3_BUCKET` / `S3_REGION` / `AWS_*` | For S3 | _(none)_ | Prescription object storage (follow-up) |
 
 Changing `CHROMA_COLLECTION` or `EMBEDDING_MODEL` without reindexing makes existing embeddings unusable for search.
 

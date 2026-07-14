@@ -33,3 +33,25 @@ def test_database_url_override(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///C:/tmp/custom.db")
     config.get_database_url.cache_clear()
     assert config.get_database_url() == "sqlite:///C:/tmp/custom.db"
+
+
+def test_database_url_normalizes_render_postgres(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql://user:pass@dpg-xxx/pharma",
+    )
+    config.get_database_url.cache_clear()
+    assert config.get_database_url().startswith("postgresql+psycopg://")
+
+
+def test_jwt_secret_missing(monkeypatch):
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    config.get_jwt_secret.cache_clear()
+    try:
+        config.get_jwt_secret()
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "JWT_SECRET" in str(exc)
+    finally:
+        monkeypatch.setenv("JWT_SECRET", "test-jwt-secret-not-for-production")
+        config.get_jwt_secret.cache_clear()

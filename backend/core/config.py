@@ -58,13 +58,19 @@ def get_database_url() -> str:
     """Return the SQLAlchemy database URL.
 
     Default: SQLite file ``pharma.db`` under the project root (CWD-independent).
-    Override with ``DATABASE_URL``.
+    Override with ``DATABASE_URL`` (Render Postgres / local Postgres supported).
+
+    ``postgres://`` and ``postgresql://`` URLs are normalized to the
+    ``postgresql+psycopg://`` SQLAlchemy driver.
     """
     override = _env("DATABASE_URL")
     if override:
+        if override.startswith("postgres://"):
+            override = "postgresql+psycopg://" + override[len("postgres://") :]
+        elif override.startswith("postgresql://") and "+psycopg" not in override.split("://", 1)[0]:
+            override = "postgresql+psycopg://" + override[len("postgresql://") :]
         return override
     db_path = (PROJECT_ROOT / "pharma.db").resolve()
-    # SQLite URLs need forward slashes on Windows.
     return f"sqlite:///{db_path.as_posix()}"
 
 
@@ -90,3 +96,38 @@ def get_chroma_collection_name() -> str:
 def get_embedding_model_name() -> str:
     """Return the sentence-transformers model name used for embeddings."""
     return _env("EMBEDDING_MODEL", "all-MiniLM-L6-v2") or "all-MiniLM-L6-v2"
+
+
+@lru_cache(maxsize=1)
+def get_jwt_secret() -> str:
+    """Return the JWT signing secret from ``JWT_SECRET``.
+
+    Raises:
+        RuntimeError: If unset — required whenever the API serves authenticated routes.
+    """
+    secret = _env("JWT_SECRET")
+    if not secret:
+        raise RuntimeError(
+            "JWT_SECRET is not set. Copy .env.example to .env and set a long random secret. "
+            "See docs/auth.md."
+        )
+    return secret
+
+
+def get_jwt_expire_minutes() -> int:
+    """Access-token lifetime in minutes (default 60)."""
+    raw = _env("JWT_EXPIRE_MINUTES", "60") or "60"
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 60
+
+
+def get_bootstrap_admin_email() -> str | None:
+    """Optional email used to create the first admin on startup."""
+    return _env("BOOTSTRAP_ADMIN_EMAIL")
+
+
+def get_bootstrap_admin_password() -> str | None:
+    """Optional password paired with ``BOOTSTRAP_ADMIN_EMAIL``."""
+    return _env("BOOTSTRAP_ADMIN_PASSWORD")

@@ -8,7 +8,7 @@ from unittest.mock import patch
 from backend.api import ocr_api
 
 
-def test_ocr_extract_deletes_temp_file(client, tmp_path):
+def test_ocr_extract_deletes_temp_file(client, cashier_headers):
     created: list[str] = []
 
     real_named = __import__("tempfile").NamedTemporaryFile
@@ -24,6 +24,7 @@ def test_ocr_extract_deletes_temp_file(client, tmp_path):
         response = client.post(
             "/ocr/extract",
             files={"file": ("rx.png", BytesIO(b"fake-image-bytes"), "image/png")},
+            headers=cashier_headers,
         )
 
     assert response.status_code == 200
