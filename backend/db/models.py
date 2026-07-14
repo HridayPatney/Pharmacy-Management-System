@@ -1,11 +1,13 @@
-#SQLAlchemy models
+"""SQLAlchemy ORM models for PharmaAssist."""
 
-# backend/db/models.py
+from sqlalchemy import Column, Date, Float, Integer, String
 
-from sqlalchemy import Column, String, Integer, Float, Date
 from backend.db.database import Base
 
+
 class Medicine(Base):
+    """A single inventory item tracked in SQLite and mirrored in Chroma."""
+
     __tablename__ = "medicines"
 
     id = Column(String, primary_key=True, index=True)

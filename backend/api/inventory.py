@@ -1,47 +1,30 @@
-# backend/api/inventory.py
+"""Inventory CRUD, low-stock, and sell/invoice HTTP routes."""
+
+from __future__ import annotations
+
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List
-from datetime import date
-from datetime import datetime
+
 from backend.db import models
-from backend.db.database import SessionLocal
-from backend.services.vector_search import add_medicine_to_vector_db, delete_medicine_from_vector_db
+from backend.db.database import get_db
+from backend.schemas.inventory import MedicineSchema, SellRequest, SellResponse
 from backend.services.drug_api import fetch_drug_summary
+from backend.services.vector_search import (
+    add_medicine_to_vector_db,
+    delete_medicine_from_vector_db,
+)
 
 router = APIRouter()
 
-# Dependency to get DB session
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# Pydantic schema for response/request
-class MedicineSchema(BaseModel):
-    id: str
-    name: str
-    dosage: str
-    quantity: int
-    price: float
-    expiry_date: date
-
-    class Config:
-        orm_mode = True
-
-# -----------------------------
-# Add a medicine
-# -----------------------------
 @router.post("/add", response_model=MedicineSchema)
 def add_medicine(med: MedicineSchema, db: Session = Depends(get_db)):
+    """Create a medicine in SQLite and embed its drug summary in Chroma."""
     if db.query(models.Medicine).filter(models.Medicine.id == med.id).first():
         raise HTTPException(status_code=400, detail="Medicine with this ID already exists")
-    new_med = models.Medicine(**med.dict())
+    new_med = models.Medicine(**med.model_dump())
     db.add(new_med)
     db.commit()
     db.refresh(new_med)
@@ -51,18 +34,16 @@ def add_medicine(med: MedicineSchema, db: Session = Depends(get_db)):
 
     return new_med
 
-# -----------------------------
-# Get all medicines
-# -----------------------------
-@router.get("/all", response_model=List[MedicineSchema])
+
+@router.get("/all", response_model=list[MedicineSchema])
 def get_all_medicines(db: Session = Depends(get_db)):
+    """Return every medicine currently in inventory."""
     return db.query(models.Medicine).all()
 
-# -----------------------------
-# Delete a medicine by ID
-# -----------------------------
+
 @router.delete("/delete/{med_id}")
 def delete_medicine(med_id: str, db: Session = Depends(get_db)):
+    """Delete a medicine from SQLite and remove its Chroma embedding."""
     med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
     if not med:
         raise HTTPException(status_code=404, detail="Medicine not found")
@@ -70,48 +51,45 @@ def delete_medicine(med_id: str, db: Session = Depends(get_db)):
     db.delete(med)
     db.commit()
 
-    # Remove from vector DB as well
     delete_medicine_from_vector_db(med_id)
 
     return {"detail": f"Medicine {med_id} deleted from database and vector index"}
 
-# -----------------------------
-# Update a medicine
-# -----------------------------
+
 @router.put("/update/{med_id}", response_model=MedicineSchema)
 def update_medicine(med_id: str, med_update: MedicineSchema, db: Session = Depends(get_db)):
+    """Replace medicine fields and refresh the Chroma embedding."""
     med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
     if not med:
         raise HTTPException(status_code=404, detail="Medicine not found")
 
-    for key, value in med_update.dict().items():
+    for key, value in med_update.model_dump().items():
         setattr(med, key, value)
     db.commit()
     db.refresh(med)
 
-    # Re-fetch summary and re-embed
     summary = fetch_drug_summary(med_update.name) or ""
     delete_medicine_from_vector_db(med_id)
     add_medicine_to_vector_db(med_id, med_update.name, summary)
 
     return med
 
-# -----------------------------
-# Get low-stock medicines
-# -----------------------------
-@router.get("/low-stock", response_model=List[MedicineSchema])
+
+@router.get("/low-stock", response_model=list[MedicineSchema])
 def get_low_stock(threshold: int = 10, db: Session = Depends(get_db)):
+    """Return medicines whose quantity is at or below ``threshold`` (default 10)."""
     return db.query(models.Medicine).filter(models.Medicine.quantity <= threshold).all()
 
 
-@router.post("/sell")
-def sell_medicines(payload: dict, db: Session = Depends(get_db)):
+@router.post("/sell", response_model=SellResponse)
+def sell_medicines(payload: SellRequest, db: Session = Depends(get_db)):
+    """Decrement stock by medicine name and return an invoice payload for the UI."""
     sold_items = []
-    total_price = 0
+    total_price = 0.0
 
-    for item in payload.get("medicines", []):
-        name = item["name"]
-        qty = item["quantity"]
+    for item in payload.medicines:
+        name = item.name
+        qty = item.quantity
 
         medicine = db.query(models.Medicine).filter(models.Medicine.name == name).first()
 
@@ -127,7 +105,7 @@ def sell_medicines(payload: dict, db: Session = Depends(get_db)):
             "name": name,
             "quantity": qty,
             "unit_price": medicine.price,
-            "subtotal": medicine.price * qty
+            "subtotal": medicine.price * qty,
         })
         total_price += medicine.price * qty
 
@@ -135,6 +113,6 @@ def sell_medicines(payload: dict, db: Session = Depends(get_db)):
         "invoice": {
             "items": sold_items,
             "total": total_price,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
     }

@@ -19,6 +19,7 @@ __pycache__/
 # Database and ChromaDB persistence
 *.sqlite3
 *.db
+smoke_test.db
 chroma_store/
 
 # Logs and temp
