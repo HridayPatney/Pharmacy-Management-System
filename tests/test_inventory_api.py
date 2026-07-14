@@ -131,7 +131,7 @@ def test_add_returns_503_when_chroma_sync_fails_but_row_persists(
         "/inventory/add", json=sample_medicine_payload, headers=pharmacist_headers
     )
     assert response.status_code == 503
-    assert "vector index" in response.json()["detail"].lower()
+    assert "vector index" in response.json()["error"]["message"].lower()
 
     rows = client.get("/inventory/all", headers=pharmacist_headers).json()
     assert len(rows) == 1

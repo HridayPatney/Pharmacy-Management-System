@@ -9,19 +9,19 @@ Browser / future React
 Render Web Service  (FastAPI + Chroma on persistent disk)
         │
         ├── Render Postgres  (DATABASE_URL)
-        └── AWS S3           (prescription images — next PR wires uploads)
+        └── AWS S3           (prescriptions when STORAGE_BACKEND=s3)
 ```
 
 ## 1. Render Postgres
 
 1. In the Render dashboard create a **PostgreSQL** instance.
-2. Copy the **External Database URL** (or Internal if the web service is on Render too — prefer Internal).
-3. You will set this as `DATABASE_URL` on the web service. The app rewrites `postgres://` / `postgresql://` to `postgresql+psycopg://` automatically.
+2. Copy the **Internal Database URL** (same private network as the web service).
+3. Set as `DATABASE_URL` on the web service. The app rewrites `postgres://` / `postgresql://` to `postgresql+psycopg://` automatically.
 
 ## 2. Render Web Service (main app)
 
 1. New **Web Service** from this GitHub repo.
-2. Runtime: **Docker** (use the repo `Dockerfile`) or native Python:
+2. Runtime: **Docker** (repo `Dockerfile`) or Python:
    - Build: `pip install -r requirements-api.txt`
    - Start: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 3. Attach a **persistent disk**, mount e.g. `/data`, and set:
@@ -29,8 +29,6 @@ Render Web Service  (FastAPI + Chroma on persistent disk)
 ```env
 CHROMA_PATH=/data/chroma_store
 ```
-
-(SQLite is not used in prod if `DATABASE_URL` points at Render Postgres.)
 
 ### Required env vars
 
@@ -44,31 +42,38 @@ CHROMA_PATH=/data/chroma_store
 | `CORS_ORIGINS` | Your frontend origin(s) |
 | `CHROMA_PATH` | Path on the persistent disk |
 
-### S3 (ready for next PR)
+### Health checks (Render)
+
+- Liveness: `GET /health/live`
+- Readiness: `GET /health/ready` (fails only if DB is down; Chroma down → `degraded`)
+
+### S3 prescription storage
 
 | Variable | Purpose |
 |----------|---------|
+| `STORAGE_BACKEND` | `s3` in production (`local` default for DIY) |
 | `S3_BUCKET` | Bucket name |
 | `S3_REGION` | e.g. `ap-south-1` |
-| `AWS_ACCESS_KEY_ID` | IAM user / role key |
+| `AWS_ACCESS_KEY_ID` | IAM user key |
 | `AWS_SECRET_ACCESS_KEY` | Secret |
+| `S3_ENDPOINT_URL` | Optional (R2 / MinIO) |
 
-OCR currently uses temp files; S3 wiring will read these same env vars.
+`POST /ocr/extract` stores the image then returns OCR fields plus `file_key`.
 
 ## 3. First deploy checklist
 
 1. Deploy Postgres + Web Service.
-2. Confirm `GET /` returns OK.
-3. Login with bootstrap admin → `POST /auth/login`.
+2. Confirm `GET /health/live` and `GET /health/ready`.
+3. Login → `POST /auth/login`.
 4. Create pharmacist/cashier via `POST /auth/register`.
-5. Rotate bootstrap password after first login if it was shared in the dashboard.
+5. Prefer `GET /inventory/?page=1&limit=20` over `/inventory/all`.
 
 ## 4. Local vs production
 
 | Local | Production (Render) |
 |-------|---------------------|
 | SQLite default file | Render Postgres via `DATABASE_URL` |
+| `STORAGE_BACKEND=local` | `STORAGE_BACKEND=s3` + AWS keys |
 | Optional chroma under repo | Disk mount `CHROMA_PATH` |
-| `.env` file | Render Environment |
 
 See also [auth.md](auth.md) and [environment.md](environment.md).

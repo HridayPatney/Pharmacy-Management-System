@@ -33,6 +33,7 @@ pytest -k sell
 | Config helpers | `tests/test_config.py` |
 | Pydantic schemas | `tests/test_schemas.py` |
 | Auth / roles / audit | `tests/test_auth.py` |
+| Health, errors, pagination, S3/local OCR, full API contract | `tests/test_api_polish.py` |
 | Inventory + transactional sell + Chroma 503 | `tests/test_inventory_api.py` |
 | OCR temp-file cleanup | `tests/test_ocr_api.py` |
 | Lazy Chroma init | `tests/test_vector_search_lazy.py` |

@@ -54,3 +54,12 @@ class SellResponse(BaseModel):
     """Wrapper returned by ``POST /inventory/sell``."""
 
     invoice: Invoice
+
+
+class PaginatedMedicines(BaseModel):
+    """Paginated inventory list response."""
+
+    items: list[MedicineSchema]
+    page: int
+    limit: int
+    total: int

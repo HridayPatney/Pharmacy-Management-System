@@ -21,6 +21,8 @@ __pycache__/
 *.db
 smoke_test.db
 chroma_store/
+uploads/
+
 
 # Logs and temp
 *.log
