@@ -34,6 +34,7 @@ pytest -k sell
 | Pydantic schemas | `tests/test_schemas.py` |
 | Inventory + transactional sell + Chroma 503 | `tests/test_inventory_api.py` |
 | OCR temp-file cleanup | `tests/test_ocr_api.py` |
+| Lazy Chroma init | `tests/test_vector_search_lazy.py` |
 
 Chroma, sentence-transformers, OpenCV, and Gemini are stubbed in `tests/conftest.py` so tests do not need the full ML install.
 

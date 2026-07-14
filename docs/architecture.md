@@ -12,7 +12,11 @@ backend/schemas/         Pydantic request/response models
 backend/services/        Drug metadata, Chroma search, Gemini OCR, vector sync
 backend/db/              SQLAlchemy engine, sessions, ORM models
 backend/core/config.py   Paths, secrets, CORS from environment
+scripts/experiments/     Non-production prototypes (scrapers, seed scripts)
 ```
+
+Chroma/sentence-transformers load **lazily** on first vector operation — see
+[vector-search.md](vector-search.md).
 
 ## Data stores
 

@@ -2,6 +2,8 @@
 
 Requires ``GEMINI_API_KEY`` in the environment (see ``docs/environment.md``).
 Response JSON field names are part of the client contract and must not change.
+
+Heavy imports (OpenCV, ``google.genai``) load only when the related functions run.
 """
 
 from __future__ import annotations
@@ -9,16 +11,19 @@ from __future__ import annotations
 import json
 import os
 
-import cv2
 import requests
-from google import genai
-from google.genai import types
 
 from backend.core.config import get_gemini_api_key
 
 
 def clean_image(input_path: str, output_path: str) -> None:
-    """Preprocess a prescription image (grayscale, threshold, denoise) and save it."""
+    """Preprocess a prescription image (grayscale, threshold, denoise) and save it.
+
+    Used by the module ``__main__`` demo path; the live API uploads the raw image
+    to Gemini without this preprocess step.
+    """
+    import cv2
+
     image = cv2.imread(input_path, cv2.IMREAD_COLOR)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -60,6 +65,9 @@ def extract_json(image_path: str) -> dict:
     Returns a dict with keys: Patient's Name, Medicines Prescribed, Doctor's Name,
     Clinic Name, Date. Medicine names are filtered through RxNorm when possible.
     """
+    from google import genai
+    from google.genai import types
+
     client = genai.Client(api_key=get_gemini_api_key())
     file = client.files.upload(file=image_path)
 
