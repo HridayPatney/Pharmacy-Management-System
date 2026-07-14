@@ -31,6 +31,9 @@ class SellRequest(BaseModel):
     """Body for ``POST /inventory/sell``."""
 
     medicines: list[SellItem]
+    patient: str | None = None
+    doctor: str | None = None
+    clinic: str | None = None
 
 
 class InvoiceItem(BaseModel):
@@ -48,6 +51,7 @@ class Invoice(BaseModel):
     items: list[InvoiceItem]
     total: float
     timestamp: str
+    sale_id: int | None = None
 
 
 class SellResponse(BaseModel):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -17,6 +18,19 @@ from backend.services.storage import build_prescription_key, get_storage
 router = APIRouter()
 
 
+def _safe_unlink(path: str, *, attempts: int = 5) -> None:
+    """Delete a temp path; retry briefly on Windows file locks."""
+    for i in range(attempts):
+        try:
+            if os.path.exists(path):
+                os.unlink(path)
+            return
+        except OSError:
+            if i == attempts - 1:
+                return
+            time.sleep(0.05 * (i + 1))
+
+
 @router.post("/extract")
 async def extract(
     file: UploadFile = File(...),
@@ -24,7 +38,8 @@ async def extract(
 ):
     """Upload a prescription image to configured storage, run OCR, return fields + file_key.
 
-    Uses local disk by default (``STORAGE_BACKEND=local``) or S3 when configured.
+    Durable copy goes to local disk or S3 (``STORAGE_BACKEND``). Gemini still needs a
+    short-lived local temp file; on Windows that file must not stay locked while we write it.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="Uploaded file must have a filename.")
@@ -42,12 +57,11 @@ async def extract(
         raise HTTPException(status_code=503, detail=f"Failed to store upload: {exc}") from exc
 
     suffix = Path(file.filename).suffix or ".img"
-    image_path: str | None = None
+    # Create + close the handle before writing (Windows cannot overwrite an open NamedTemporaryFile).
+    fd, image_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            storage.materialize_to_path(key, tmp.name)
-            image_path = tmp.name
-
+        Path(image_path).write_bytes(contents)
         result = extract_json(image_path)
         if isinstance(result, dict):
             result = {**result, "file_key": key}
@@ -57,8 +71,4 @@ async def extract(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR failed: {str(e)}") from e
     finally:
-        if image_path and os.path.exists(image_path):
-            try:
-                os.unlink(image_path)
-            except OSError:
-                pass
+        _safe_unlink(image_path)

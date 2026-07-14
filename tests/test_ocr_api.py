@@ -10,17 +10,14 @@ from backend.api import ocr_api
 
 def test_ocr_extract_deletes_temp_file(client, cashier_headers):
     created: list[str] = []
+    real_mkstemp = __import__("tempfile").mkstemp
 
-    real_named = __import__("tempfile").NamedTemporaryFile
+    def tracking_mkstemp(*args, **kwargs):
+        fd, path = real_mkstemp(*args, **kwargs)
+        created.append(path)
+        return fd, path
 
-    def tracking_named_temporary_file(*args, **kwargs):
-        kwargs = dict(kwargs)
-        kwargs["delete"] = False
-        tmp = real_named(*args, **kwargs)
-        created.append(tmp.name)
-        return tmp
-
-    with patch.object(ocr_api.tempfile, "NamedTemporaryFile", side_effect=tracking_named_temporary_file):
+    with patch.object(ocr_api.tempfile, "mkstemp", side_effect=tracking_mkstemp):
         response = client.post(
             "/ocr/extract",
             files={"file": ("rx.png", BytesIO(b"fake-image-bytes"), "image/png")},

@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { extractOcr, listMedicines, searchSimilar, sellMedicines } from '../api/pharmacy'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { InvoicePanel } from '../components/InvoicePanel'
 import type { Invoice, Medicine, SearchResult } from '../types/api'
 
 interface LineItem {
@@ -94,9 +95,13 @@ export function OcrInvoicePage() {
     setBusy(true)
     setError(null)
     try {
-      const res = await sellMedicines(token, medicines)
+      const res = await sellMedicines(token, medicines, { patient, doctor, clinic })
       setInvoice(res.invoice)
-      setStatus('Sale recorded.')
+      setStatus(
+        res.invoice.sale_id
+          ? `Sale #${res.invoice.sale_id} recorded.`
+          : 'Sale recorded.',
+      )
       await refreshInventory()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Sell failed')
@@ -242,37 +247,11 @@ export function OcrInvoicePage() {
       </section>
 
       {invoice ? (
-        <section className="panel stack">
-          <h2>Invoice</h2>
-          <p className="muted">
-            {patient || 'Patient'} · {doctor || 'Doctor'} · {clinic || 'Clinic'} · {invoice.timestamp}
-          </p>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Medicine</th>
-                  <th>Qty</th>
-                  <th>Unit</th>
-                  <th>Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoice.items.map((item) => (
-                  <tr key={`${item.name}-${item.quantity}`}>
-                    <td>{item.name}</td>
-                    <td>{item.quantity}</td>
-                    <td>{item.unit_price.toFixed(2)}</td>
-                    <td>{item.subtotal.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p>
-            <strong>Total: {invoice.total.toFixed(2)}</strong>
-          </p>
-        </section>
+        <InvoicePanel
+          invoice={invoice}
+          meta={{ patient, doctor, clinic }}
+          title={invoice.sale_id ? `Invoice · sale #${invoice.sale_id}` : 'Invoice'}
+        />
       ) : null}
     </div>
   )

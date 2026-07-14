@@ -30,9 +30,12 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:8501
 
 ## Features
 
+- Dashboard with stock bar chart, SKU / low-stock / value metrics
 - Login (`POST /auth/login`) + Bearer token on all staff routes
 - Inventory list with pagination / search / low-stock filter; add/update/delete for pharmacist & admin
-- OCR upload → availability / alternatives → sell + invoice view
+- Billing: counter sell, session history, **invoice PDF download**
+- OCR upload → availability / alternatives → sell + PDF invoice
+- Account: profile (`GET /auth/me`); admin sees recent audit log
 
 ## Roles
 

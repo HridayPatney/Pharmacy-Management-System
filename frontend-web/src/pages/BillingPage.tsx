@@ -1,0 +1,260 @@
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { listMedicines, listSales, sellMedicines } from '../api/pharmacy'
+import { ApiError } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
+import { InvoicePanel } from '../components/InvoicePanel'
+import { downloadInvoicePdf } from '../lib/invoicePdf'
+import type { Invoice, Medicine, Sale } from '../types/api'
+
+interface LineItem {
+  name: string
+  quantity: number
+}
+
+export function BillingPage() {
+  const { token } = useAuth()
+  const [patient, setPatient] = useState('')
+  const [doctor, setDoctor] = useState('')
+  const [clinic, setClinic] = useState('')
+  const [lines, setLines] = useState<LineItem[]>([{ name: '', quantity: 1 }])
+  const [inventory, setInventory] = useState<Medicine[]>([])
+  const [invoice, setInvoice] = useState<Invoice | null>(null)
+  const [history, setHistory] = useState<Sale[]>([])
+  const [historyTotal, setHistoryTotal] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+
+  const stockByName = useMemo(() => {
+    const map = new Map<string, Medicine>()
+    for (const m of inventory) map.set(m.name.toLowerCase(), m)
+    return map
+  }, [inventory])
+
+  async function refreshInventory() {
+    if (!token) return
+    const data = await listMedicines(token, { page: 1, limit: 100, sort: 'name' })
+    setInventory(data.items)
+  }
+
+  async function refreshHistory() {
+    if (!token) return
+    const data = await listSales(token, { page: 1, limit: 25 })
+    setHistory(data.items)
+    setHistoryTotal(data.total)
+  }
+
+  useEffect(() => {
+    if (!token) return
+    void refreshHistory().catch((err) => {
+      setError(err instanceof ApiError ? err.message : 'Failed to load sales history')
+    })
+  }, [token])
+
+  async function onSell(e: FormEvent) {
+    e.preventDefault()
+    if (!token) return
+    const medicines = lines
+      .map((l) => ({ name: l.name.trim(), quantity: l.quantity }))
+      .filter((l) => l.name && l.quantity > 0)
+    if (!medicines.length) {
+      setError('Add at least one medicine line.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setStatus(null)
+    try {
+      await refreshInventory()
+      const res = await sellMedicines(token, medicines, { patient, doctor, clinic })
+      setInvoice(res.invoice)
+      setStatus(
+        res.invoice.sale_id
+          ? `Sale #${res.invoice.sale_id} recorded — download PDF below.`
+          : 'Sale recorded — download PDF below.',
+      )
+      setLines([{ name: '', quantity: 1 }])
+      await refreshInventory()
+      await refreshHistory()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Billing failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="stack">
+      <section className="panel stack">
+        <div>
+          <h1>Billing</h1>
+          <p className="muted">
+            Counter sales persist to the database. Download PDFs any time; history below is from
+            the server (not just this browser session).
+          </p>
+        </div>
+        {error ? <div className="error-box">{error}</div> : null}
+        {status ? <p className="muted">{status}</p> : null}
+
+        <div className="row">
+          <label style={{ flex: 1 }}>
+            Patient
+            <input value={patient} onChange={(e) => setPatient(e.target.value)} placeholder="Walk-in" />
+          </label>
+          <label style={{ flex: 1 }}>
+            Doctor
+            <input value={doctor} onChange={(e) => setDoctor(e.target.value)} />
+          </label>
+          <label style={{ flex: 1 }}>
+            Clinic
+            <input value={clinic} onChange={(e) => setClinic(e.target.value)} />
+          </label>
+        </div>
+      </section>
+
+      <section className="panel stack">
+        <h2>Sale lines</h2>
+        <form className="stack" onSubmit={(e) => void onSell(e)}>
+          {lines.map((line, idx) => {
+            const stock = stockByName.get(line.name.trim().toLowerCase())
+            return (
+              <div className="row" key={idx}>
+                <label style={{ flex: 2 }}>
+                  Medicine
+                  <input
+                    list="billing-meds"
+                    value={line.name}
+                    onChange={(e) => {
+                      const next = [...lines]
+                      next[idx] = { ...line, name: e.target.value }
+                      setLines(next)
+                    }}
+                    onFocus={() => void refreshInventory()}
+                  />
+                </label>
+                <label>
+                  Qty
+                  <input
+                    type="number"
+                    min={1}
+                    value={line.quantity}
+                    onChange={(e) => {
+                      const next = [...lines]
+                      next[idx] = { ...line, quantity: Number(e.target.value) }
+                      setLines(next)
+                    }}
+                  />
+                </label>
+                <div>
+                  {line.name.trim() ? (
+                    stock ? (
+                      <span className={stock.quantity >= line.quantity ? 'badge ok' : 'badge warn'}>
+                        stock {stock.quantity} · {stock.price.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="badge warn">check name</span>
+                    )
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setLines(lines.filter((_, i) => i !== idx))}
+                >
+                  Remove
+                </button>
+              </div>
+            )
+          })}
+          <datalist id="billing-meds">
+            {inventory.map((m) => (
+              <option key={m.id} value={m.name} />
+            ))}
+          </datalist>
+          <div className="row">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setLines([...lines, { name: '', quantity: 1 }])}
+            >
+              Add line
+            </button>
+            <button type="submit" className="primary" disabled={busy}>
+              Charge & invoice
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {invoice ? (
+        <InvoicePanel
+          invoice={invoice}
+          meta={{ patient, doctor, clinic }}
+          title={invoice.sale_id ? `Invoice · sale #${invoice.sale_id}` : 'Current invoice'}
+        />
+      ) : null}
+
+      <section className="panel stack">
+        <h2>Sales history ({historyTotal})</h2>
+        {history.length === 0 ? (
+          <p className="muted">No sales recorded yet.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Patient</th>
+                  <th>When</th>
+                  <th>Total</th>
+                  <th>Items</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((sale) => (
+                  <tr key={sale.id}>
+                    <td>#{sale.id}</td>
+                    <td>{sale.patient_name || 'Walk-in'}</td>
+                    <td>{new Date(sale.created_at).toLocaleString()}</td>
+                    <td>{sale.total.toFixed(2)}</td>
+                    <td>{sale.items.length}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() =>
+                          downloadInvoicePdf(
+                            {
+                              items: sale.items.map((i) => ({
+                                name: i.medicine_name,
+                                quantity: i.quantity,
+                                unit_price: i.unit_price,
+                                subtotal: i.subtotal,
+                              })),
+                              total: sale.total,
+                              timestamp: new Date(sale.created_at).toLocaleString(),
+                              sale_id: sale.id,
+                            },
+                            {
+                              patient: sale.patient_name || undefined,
+                              doctor: sale.doctor_name || undefined,
+                              clinic: sale.clinic_name || undefined,
+                            },
+                            `sale-${sale.id}.pdf`,
+                          )
+                        }
+                      >
+                        PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}

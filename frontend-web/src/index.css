@@ -51,9 +51,59 @@ textarea {
 }
 
 .app-shell {
-  max-width: 1120px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 1.25rem 1.25rem 3rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.85rem;
+}
+
+.metric {
+  background: rgba(15, 122, 101, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+
+.metric-value {
+  font-family: var(--font-display);
+  font-size: 1.85rem;
+  margin-top: 0.25rem;
+  letter-spacing: -0.02em;
+}
+
+.metric-value.warn {
+  color: var(--warn);
+}
+
+.chart-frame {
+  width: 100%;
+  min-height: 320px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.profile-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 0.25rem;
+  word-break: break-word;
 }
 
 .topbar {

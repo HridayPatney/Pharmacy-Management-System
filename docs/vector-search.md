@@ -2,14 +2,17 @@
 
 ## When the ML stack loads
 
-Importing `backend.main` or hitting `GET /` does **not** load Chroma or
-sentence-transformers.
+Importing `backend.main` or hitting `GET /` does **not** load Chroma.
 
-Those dependencies initialize on the **first** call that needs embeddings:
+Chroma initializes on the **first** call that needs embeddings:
 
 - `POST /inventory/add` / `update` / `delete` (via `vector_sync`)
 - `POST /search/similar`
 - Scripts such as `scripts/view_vector_db.py` or `scripts/experiments/load_medicines_to_vector_db.py`
+
+Embeddings use Chroma's **default ONNX MiniLM** function (`onnxruntime`), not
+PyTorch / sentence-transformers — so a normal `pip install -r requirements-api.txt`
+is enough on Windows.
 
 OCR (`google.genai`, optional OpenCV for the local demo preprocess) also loads
 lazily inside `ocr_service` when `extract_json` / `clean_image` run.
@@ -20,10 +23,9 @@ lazily inside `ocr_service` when `extract_json` / `clean_image` run.
 |----------|---------|-------|
 | `CHROMA_PATH` | `<repo>/chroma_store` | Persistence directory |
 | `CHROMA_COLLECTION` | `medicine_embeddings` | Collection name |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Must match how existing vectors were built |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Reserved / documented; API uses Chroma default ONNX EF |
 
-Changing `EMBEDDING_MODEL` or `CHROMA_COLLECTION` without reindexing makes
-similarity results wrong or empty.
+Changing `CHROMA_COLLECTION` without reindexing makes similarity results wrong or empty.
 
 ## Reindex
 

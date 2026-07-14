@@ -1,8 +1,12 @@
 import { apiForm, apiJson } from './client'
 import type {
+  AuditLog,
   Medicine,
   OcrResult,
   PaginatedMedicines,
+  PaginatedSales,
+  Sale,
+  SaleSummary,
   SearchResult,
   SellResponse,
   TokenResponse,
@@ -68,12 +72,34 @@ export function deleteMedicine(token: string, id: string) {
 export function sellMedicines(
   token: string,
   medicines: { name: string; quantity: number }[],
+  meta: { patient?: string; doctor?: string; clinic?: string } = {},
 ) {
   return apiJson<SellResponse>('/inventory/sell', {
     method: 'POST',
     token,
-    body: JSON.stringify({ medicines }),
+    body: JSON.stringify({
+      medicines,
+      patient: meta.patient || null,
+      doctor: meta.doctor || null,
+      clinic: meta.clinic || null,
+    }),
   })
+}
+
+export function listSales(token: string, params: { page?: number; limit?: number } = {}) {
+  const qs = new URLSearchParams()
+  if (params.page) qs.set('page', String(params.page))
+  if (params.limit) qs.set('limit', String(params.limit))
+  const query = qs.toString()
+  return apiJson<PaginatedSales>(`/sales/?${query}`, { token })
+}
+
+export function fetchSale(token: string, saleId: number) {
+  return apiJson<Sale>(`/sales/${saleId}`, { token })
+}
+
+export function fetchSalesSummary(token: string) {
+  return apiJson<SaleSummary>('/sales/summary', { token })
 }
 
 export function searchSimilar(token: string, medicine_name: string, top_k = 10) {
@@ -92,4 +118,8 @@ export function extractOcr(token: string, file: File) {
 
 export function healthLive() {
   return apiJson<{ status: string }>('/health/live')
+}
+
+export function fetchAudit(token: string, limit = 50) {
+  return apiJson<AuditLog[]>(`/auth/audit?limit=${limit}`, { token })
 }

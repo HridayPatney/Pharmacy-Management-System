@@ -205,15 +205,40 @@ def sell_medicines(
             })
             total_price += medicine.price * qty
 
+        sale = models.Sale(
+            user_id=user.id,
+            patient_name=(payload.patient or "").strip() or None,
+            doctor_name=(payload.doctor or "").strip() or None,
+            clinic_name=(payload.clinic or "").strip() or None,
+            total=total_price,
+        )
+        db.add(sale)
+        db.flush()
+
+        for medicine, qty, name in planned:
+            db.add(
+                models.SaleItem(
+                    sale_id=sale.id,
+                    medicine_id=medicine.id,
+                    medicine_name=name,
+                    quantity=qty,
+                    unit_price=medicine.price,
+                    subtotal=medicine.price * qty,
+                )
+            )
+
         write_audit(
             db,
             user=user,
             action="inventory.sell",
-            entity_type="invoice",
-            entity_id=None,
+            entity_type="sale",
+            entity_id=str(sale.id),
             details={"items": sold_items, "total": total_price},
         )
         db.commit()
+        db.refresh(sale)
+        sale_id = sale.id
+        created_at = sale.created_at
     except HTTPException:
         db.rollback()
         raise
@@ -221,10 +246,12 @@ def sell_medicines(
         db.rollback()
         raise
 
+    stamp = created_at.strftime("%Y-%m-%d %H:%M") if created_at else datetime.now().strftime("%Y-%m-%d %H:%M")
     return {
         "invoice": {
             "items": sold_items,
             "total": total_price,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "timestamp": stamp,
+            "sale_id": sale_id,
         }
     }
