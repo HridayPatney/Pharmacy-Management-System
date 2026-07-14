@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# Auth config required before app import; safe default for the test suite.
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-not-for-production")
+
 
 def _stub_ml_modules() -> MagicMock:
     for name in (
@@ -77,12 +80,13 @@ def client(tmp_path, monkeypatch, vector_mocks):
     """FastAPI ``TestClient`` bound to an isolated temp SQLite database."""
     db_path = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("JWT_SECRET", "test-jwt-secret-not-for-production")
 
-    # Config and engine are cached / module-level; rebuild for this DATABASE_URL.
     import backend.core.config as config
     import backend.db.database as database
 
     config.get_database_url.cache_clear()
+    config.get_jwt_secret.cache_clear()
     database.DATABASE_URL = config.get_database_url()
     database.engine = database.create_engine(
         database.DATABASE_URL,
@@ -105,6 +109,76 @@ def client(tmp_path, monkeypatch, vector_mocks):
 
     database.Base.metadata.drop_all(bind=database.engine)
     database.engine.dispose()
+
+
+def _create_user(db, *, email: str, password: str, role: str):
+    from backend.core.security import hash_password
+    from backend.db import models
+
+    user = models.User(
+        email=email.lower(),
+        hashed_password=hash_password(password),
+        role=role,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.fixture
+def admin_headers(client):
+    """Bearer headers for an admin user."""
+    from backend.db.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        _create_user(db, email="admin@test.com", password="adminpass1", role="admin")
+    finally:
+        db.close()
+
+    token = client.post(
+        "/auth/login",
+        json={"email": "admin@test.com", "password": "adminpass1"},
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def pharmacist_headers(client):
+    """Bearer headers for a pharmacist user."""
+    from backend.db.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        _create_user(db, email="pharm@test.com", password="pharmpass1", role="pharmacist")
+    finally:
+        db.close()
+
+    token = client.post(
+        "/auth/login",
+        json={"email": "pharm@test.com", "password": "pharmpass1"},
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def cashier_headers(client):
+    """Bearer headers for a cashier user."""
+    from backend.db.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        _create_user(db, email="cash@test.com", password="cashpass1", role="cashier")
+    finally:
+        db.close()
+
+    token = client.post(
+        "/auth/login",
+        json={"email": "cash@test.com", "password": "cashpass1"},
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture

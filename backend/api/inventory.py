@@ -7,9 +7,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from backend.core.deps import require_roles
+from backend.core.roles import INVENTORY_WRITE_ROLES, STAFF_ROLES
 from backend.db import models
 from backend.db.database import get_db
 from backend.schemas.inventory import MedicineSchema, SellRequest, SellResponse
+from backend.services.audit import write_audit
 from backend.services.drug_api import fetch_drug_summary
 from backend.services.vector_sync import remove_medicine_embedding, sync_medicine_embedding
 
@@ -17,8 +20,12 @@ router = APIRouter()
 
 
 @router.post("/add", response_model=MedicineSchema)
-def add_medicine(med: MedicineSchema, db: Session = Depends(get_db)):
-    """Create a medicine in SQLite and embed its drug summary in Chroma."""
+def add_medicine(
+    med: MedicineSchema,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
+):
+    """Create a medicine in the DB and embed its drug summary in Chroma."""
     if db.query(models.Medicine).filter(models.Medicine.id == med.id).first():
         raise HTTPException(status_code=400, detail="Medicine with this ID already exists")
     new_med = models.Medicine(**med.model_dump())
@@ -33,19 +40,35 @@ def add_medicine(med: MedicineSchema, db: Session = Depends(get_db)):
 
 
 @router.get("/all", response_model=list[MedicineSchema])
-def get_all_medicines(db: Session = Depends(get_db)):
+def get_all_medicines(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_roles(*STAFF_ROLES)),
+):
     """Return every medicine currently in inventory."""
     return db.query(models.Medicine).all()
 
 
 @router.delete("/delete/{med_id}")
-def delete_medicine(med_id: str, db: Session = Depends(get_db)):
-    """Delete a medicine from SQLite and remove its Chroma embedding."""
+def delete_medicine(
+    med_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
+):
+    """Delete a medicine from the DB and remove its Chroma embedding."""
     med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
     if not med:
         raise HTTPException(status_code=404, detail="Medicine not found")
 
+    name = med.name
     db.delete(med)
+    write_audit(
+        db,
+        user=user,
+        action="medicine.delete",
+        entity_type="medicine",
+        entity_id=med_id,
+        details={"name": name},
+    )
     db.commit()
 
     remove_medicine_embedding(med_id)
@@ -54,7 +77,12 @@ def delete_medicine(med_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/update/{med_id}", response_model=MedicineSchema)
-def update_medicine(med_id: str, med_update: MedicineSchema, db: Session = Depends(get_db)):
+def update_medicine(
+    med_id: str,
+    med_update: MedicineSchema,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
+):
     """Replace medicine fields and refresh the Chroma embedding."""
     med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
     if not med:
@@ -66,31 +94,37 @@ def update_medicine(med_id: str, med_update: MedicineSchema, db: Session = Depen
     db.refresh(med)
 
     summary = fetch_drug_summary(med_update.name) or ""
-    # Upsert replaces any prior embedding for this id inside the vector service.
     sync_medicine_embedding(med_id, med_update.name, summary)
 
     return med
 
 
 @router.get("/low-stock", response_model=list[MedicineSchema])
-def get_low_stock(threshold: int = 10, db: Session = Depends(get_db)):
+def get_low_stock(
+    threshold: int = 10,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_roles(*STAFF_ROLES)),
+):
     """Return medicines whose quantity is at or below ``threshold`` (default 10)."""
     return db.query(models.Medicine).filter(models.Medicine.quantity <= threshold).all()
 
 
 @router.post("/sell", response_model=SellResponse)
-def sell_medicines(payload: SellRequest, db: Session = Depends(get_db)):
-    """Decrement stock for all lines in one SQLite transaction and return an invoice.
+def sell_medicines(
+    payload: SellRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_roles(*STAFF_ROLES)),
+):
+    """Decrement stock for all lines in one transaction and return an invoice.
 
     Validates every line before mutating. On any failure the whole sell is rolled back
-    so earlier lines are not partially committed.
+    so earlier lines are not partially committed. Audits the successful sale.
     """
     if not payload.medicines:
         raise HTTPException(status_code=400, detail="Sell request must include at least one medicine.")
 
     sold_items = []
     total_price = 0.0
-    # Track ORM rows with intended decrements so we apply only after full validation.
     planned: list[tuple[models.Medicine, int, str]] = []
 
     try:
@@ -124,6 +158,14 @@ def sell_medicines(payload: SellRequest, db: Session = Depends(get_db)):
             })
             total_price += medicine.price * qty
 
+        write_audit(
+            db,
+            user=user,
+            action="inventory.sell",
+            entity_type="invoice",
+            entity_id=None,
+            details={"items": sold_items, "total": total_price},
+        )
         db.commit()
     except HTTPException:
         db.rollback()

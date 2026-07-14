@@ -11,13 +11,15 @@ backend/api/             Route handlers (thin)
 backend/schemas/         Pydantic request/response models
 backend/services/        Drug metadata, Chroma search, Gemini OCR, vector sync
 backend/db/              SQLAlchemy engine, sessions, ORM models
-backend/core/config.py   Paths, secrets, CORS from environment
+backend/core/config.py   Paths, secrets, CORS, JWT from environment
+backend/core/deps.py     Auth dependencies (Bearer JWT, roles)
 scripts/experiments/     Non-production prototypes (scrapers, seed scripts)
 ```
 
 Chroma/sentence-transformers load **lazily** on first vector operation — see
-[vector-search.md](vector-search.md).
-
+[vector-search.md](vector-search.md). Auth and roles are documented in
+[auth.md](auth.md). Deploy on Render + Render Postgres + S3 — see
+[deployment.md](deployment.md).
 ## Data stores
 
 | Store | Role | Config |

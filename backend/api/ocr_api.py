@@ -6,15 +6,21 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from backend.core.deps import require_roles
+from backend.core.roles import STAFF_ROLES
+from backend.db import models
 from backend.services.ocr_service import extract_json
 
 router = APIRouter()
 
 
 @router.post("/extract")
-async def extract(file: UploadFile = File(...)):
+async def extract(
+    file: UploadFile = File(...),
+    _: models.User = Depends(require_roles(*STAFF_ROLES)),
+):
     """Accept an uploaded prescription image and return structured JSON fields.
 
     Temporary upload files are always deleted after processing (or on failure).

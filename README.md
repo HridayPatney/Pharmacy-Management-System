@@ -50,7 +50,8 @@ Pinned full freeze (reproducible installs): `requirements-lock.txt`.
 cp .env.example .env
 ```
 
-Edit `.env` and set `GEMINI_API_KEY`. See [docs/environment.md](docs/environment.md).
+Set at least `JWT_SECRET`, bootstrap admin email/password, and (for OCR) `GEMINI_API_KEY`.
+See [docs/environment.md](docs/environment.md) and [docs/auth.md](docs/auth.md).
 
 ### 4. Initialize the database
 
@@ -101,6 +102,8 @@ docs/             Environment and operational docs
 ## Documentation
 
 - [Environment variables & secrets](docs/environment.md)
+- [Authentication & roles](docs/auth.md)
+- [Deployment (Render + Postgres + S3)](docs/deployment.md)
 - [Backend architecture](docs/architecture.md)
 - [Vector search / reindex](docs/vector-search.md)
 - [Testing](docs/testing.md)

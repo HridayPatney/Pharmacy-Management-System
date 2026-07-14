@@ -1,0 +1,12 @@
+venv/
+.venv/
+.git/
+.env
+__pycache__/
+*.pyc
+chroma_store/
+*.db
+frontend/
+docs/
+tests/
+.pytest_cache/
