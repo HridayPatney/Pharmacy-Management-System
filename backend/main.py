@@ -7,9 +7,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import auth, inventory, ocr_api, search
+from backend.api import auth, health, inventory, ocr_api, search
 from backend.core.bootstrap import bootstrap_admin_if_needed, ensure_schema
 from backend.core.config import get_cors_origins
+from backend.core.errors import register_exception_handlers
 
 
 @asynccontextmanager
@@ -26,6 +27,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+register_exception_handlers(app)
+
 _cors_origins = get_cors_origins()
 app.add_middleware(
     CORSMiddleware,
@@ -35,6 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(inventory.router, prefix="/inventory", tags=["Inventory"])
 app.include_router(search.router, prefix="/search", tags=["Vector Search"])
@@ -43,5 +47,5 @@ app.include_router(ocr_api.router, prefix="/ocr", tags=["OCR"])
 
 @app.get("/")
 def read_root():
-    """Liveness check for the API process."""
+    """Liveness check for the API process (compat; prefer ``GET /health/live``)."""
     return {"message": "PharmaAssist API is running."}

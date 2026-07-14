@@ -53,15 +53,18 @@ Do **not** roll back SQLite when Chroma fails: stock accuracy beats search fresh
 
 | Method | Path | Notes |
 |--------|------|--------|
-| GET | `/` | Liveness |
+| GET | `/` | Liveness (compat) |
+| GET | `/health/live` | Process liveness |
+| GET | `/health/ready` | DB + Chroma (+ optional Gemini) |
 | POST | `/inventory/add` | Body = medicine fields; rejects duplicate `id` |
-| GET | `/inventory/all` | Full list |
+| GET | `/inventory/` | Paginated list `?page&limit&q&low_stock&sort&order` |
+| GET | `/inventory/all` | Full list (compat) |
 | PUT | `/inventory/update/{med_id}` | Full replace + re-embed |
-| DELETE | `/inventory/delete/{med_id}` | SQLite + Chroma |
+| DELETE | `/inventory/delete/{med_id}` | SQLite/Postgres + Chroma |
 | GET | `/inventory/low-stock` | `threshold` query (default 10) |
 | POST | `/inventory/sell` | `{ "medicines": [{ "name", "quantity" }] }` → `{ "invoice": { items, total, timestamp } }` |
 | POST | `/search/similar` | `{ medicine_name, top_k? }` → `[{ name, score }]` (score = distance) |
-| POST | `/ocr/extract` | Multipart image → prescription JSON field names used by the UI |
+| POST | `/ocr/extract` | Multipart image → prescription JSON + `file_key` |
 
 ## Schemas
 

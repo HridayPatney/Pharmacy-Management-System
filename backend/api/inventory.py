@@ -1,22 +1,36 @@
-"""Inventory CRUD, low-stock, and sell/invoice HTTP routes."""
+"""Inventory CRUD, low-stock, sell/invoice, and paginated list HTTP routes."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import asc, desc, or_
 from sqlalchemy.orm import Session
 
 from backend.core.deps import require_roles
 from backend.core.roles import INVENTORY_WRITE_ROLES, STAFF_ROLES
 from backend.db import models
 from backend.db.database import get_db
-from backend.schemas.inventory import MedicineSchema, SellRequest, SellResponse
+from backend.schemas.inventory import (
+    MedicineSchema,
+    PaginatedMedicines,
+    SellRequest,
+    SellResponse,
+)
 from backend.services.audit import write_audit
 from backend.services.drug_api import fetch_drug_summary
 from backend.services.vector_sync import remove_medicine_embedding, sync_medicine_embedding
 
 router = APIRouter()
+
+_SORT_COLUMNS = {
+    "name": models.Medicine.name,
+    "quantity": models.Medicine.quantity,
+    "price": models.Medicine.price,
+    "expiry_date": models.Medicine.expiry_date,
+    "id": models.Medicine.id,
+}
 
 
 @router.post("/add", response_model=MedicineSchema)
@@ -39,12 +53,49 @@ def add_medicine(
     return new_med
 
 
+@router.get("/", response_model=PaginatedMedicines)
+def list_medicines(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    q: str | None = Query(None, description="Case-insensitive name/id search"),
+    low_stock: int | None = Query(
+        None, ge=0, description="If set, only medicines with quantity <= this value"
+    ),
+    sort: str = Query("name", description="One of: name, quantity, price, expiry_date, id"),
+    order: str = Query("asc", description="asc or desc"),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_roles(*STAFF_ROLES)),
+):
+    """Paginated inventory with optional search, low-stock filter, and sorting."""
+    if order.lower() not in ("asc", "desc"):
+        raise HTTPException(status_code=400, detail="order must be 'asc' or 'desc'")
+
+    query = db.query(models.Medicine)
+
+    if q:
+        term = f"%{q.strip()}%"
+        query = query.filter(
+            or_(models.Medicine.name.ilike(term), models.Medicine.id.ilike(term))
+        )
+
+    if low_stock is not None:
+        query = query.filter(models.Medicine.quantity <= low_stock)
+
+    sort_key = sort.lower()
+    column = _SORT_COLUMNS.get(sort_key, models.Medicine.name)
+    query = query.order_by(desc(column) if order.lower() == "desc" else asc(column))
+
+    total = query.count()
+    items = query.offset((page - 1) * limit).limit(limit).all()
+    return PaginatedMedicines(items=items, page=page, limit=limit, total=total)
+
+
 @router.get("/all", response_model=list[MedicineSchema])
 def get_all_medicines(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_roles(*STAFF_ROLES)),
 ):
-    """Return every medicine currently in inventory."""
+    """Return every medicine (compat). Prefer ``GET /inventory/`` with pagination."""
     return db.query(models.Medicine).all()
 
 
@@ -115,11 +166,7 @@ def sell_medicines(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_roles(*STAFF_ROLES)),
 ):
-    """Decrement stock for all lines in one transaction and return an invoice.
-
-    Validates every line before mutating. On any failure the whole sell is rolled back
-    so earlier lines are not partially committed. Audits the successful sale.
-    """
+    """Decrement stock for all lines in one transaction and return an invoice."""
     if not payload.medicines:
         raise HTTPException(status_code=400, detail="Sell request must include at least one medicine.")
 
