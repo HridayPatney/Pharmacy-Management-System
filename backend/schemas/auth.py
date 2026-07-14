@@ -51,6 +51,7 @@ class AuditLogOut(BaseModel):
 
     id: int
     user_id: int
+    user_email: str | None = None
     action: str
     entity_type: str
     entity_id: str | None

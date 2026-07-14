@@ -18,6 +18,10 @@ const LOW_STOCK = 10
 export function DashboardPage() {
   const { token } = useAuth()
   const [items, setItems] = useState<Medicine[]>([])
+  const [expired, setExpired] = useState<Medicine[]>([])
+  const [soon, setSoon] = useState<Medicine[]>([])
+  const [expiredTotal, setExpiredTotal] = useState(0)
+  const [soonTotal, setSoonTotal] = useState(0)
   const [sales, setSales] = useState<SaleSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -29,7 +33,7 @@ export function DashboardPage() {
       setLoading(true)
       setError(null)
       try {
-        const [page, summary] = await Promise.all([
+        const [page, summary, expiredPage, soonPage] = await Promise.all([
           listMedicines(token, {
             page: 1,
             limit: 100,
@@ -37,10 +41,29 @@ export function DashboardPage() {
             order: 'asc',
           }),
           fetchSalesSummary(token),
+          listMedicines(token, {
+            page: 1,
+            limit: 10,
+            expiry: 'expired',
+            sort: 'expiry_date',
+            order: 'asc',
+          }),
+          listMedicines(token, {
+            page: 1,
+            limit: 10,
+            expiry: 'soon',
+            days: 30,
+            sort: 'expiry_date',
+            order: 'asc',
+          }),
         ])
         if (!cancelled) {
           setItems(page.items)
           setSales(summary)
+          setExpired(expiredPage.items)
+          setSoon(soonPage.items)
+          setExpiredTotal(expiredPage.total)
+          setSoonTotal(soonPage.total)
         }
       } catch (err) {
         if (!cancelled) {
@@ -78,7 +101,7 @@ export function DashboardPage() {
       <section className="panel stack">
         <div>
           <h1>Dashboard</h1>
-          <p className="muted">Stock levels plus lifetime / today sales totals.</p>
+          <p className="muted">Stock, sales totals, and expiry alerts.</p>
         </div>
         {error ? <div className="error-box">{error}</div> : null}
         {loading ? <p className="muted">Loading…</p> : null}
@@ -114,8 +137,56 @@ export function DashboardPage() {
                 : '—'}
             </div>
           </div>
+          <div className="metric">
+            <div className="metric-label">Expired SKUs</div>
+            <div className="metric-value warn">{expiredTotal}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Expiring ≤30d</div>
+            <div className="metric-value warn">{soonTotal}</div>
+          </div>
         </div>
       </section>
+
+      {(expiredTotal > 0 || soonTotal > 0) && (
+        <section className="panel stack">
+          <h2>Expiry alerts</h2>
+          <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Name</th>
+                    <th>Qty</th>
+                    <th>Expiry</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expired.map((m) => (
+                    <tr key={`e-${m.id}`}>
+                      <td>
+                        <span className="badge warn">expired</span>
+                      </td>
+                      <td>{m.name}</td>
+                      <td>{m.quantity}</td>
+                      <td>{m.expiry_date}</td>
+                    </tr>
+                  ))}
+                  {soon.map((m) => (
+                    <tr key={`s-${m.id}`}>
+                      <td>
+                        <span className="badge warn">soon</span>
+                      </td>
+                      <td>{m.name}</td>
+                      <td>{m.quantity}</td>
+                      <td>{m.expiry_date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+        </section>
+      )}
 
       <section className="panel stack">
         <h2>Stock levels</h2>

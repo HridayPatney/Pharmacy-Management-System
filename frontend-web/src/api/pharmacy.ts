@@ -31,6 +31,8 @@ export function listMedicines(
     limit?: number
     q?: string
     low_stock?: number
+    expiry?: 'expired' | 'soon'
+    days?: number
     sort?: string
     order?: string
   } = {},
@@ -40,6 +42,8 @@ export function listMedicines(
   if (params.limit) qs.set('limit', String(params.limit))
   if (params.q) qs.set('q', params.q)
   if (params.low_stock != null) qs.set('low_stock', String(params.low_stock))
+  if (params.expiry) qs.set('expiry', params.expiry)
+  if (params.days != null) qs.set('days', String(params.days))
   if (params.sort) qs.set('sort', params.sort)
   if (params.order) qs.set('order', params.order)
   const query = qs.toString()
@@ -86,16 +90,24 @@ export function sellMedicines(
   })
 }
 
-export function listSales(token: string, params: { page?: number; limit?: number } = {}) {
+export function listSales(
+  token: string,
+  params: { page?: number; limit?: number; status?: 'completed' | 'cancelled' } = {},
+) {
   const qs = new URLSearchParams()
   if (params.page) qs.set('page', String(params.page))
   if (params.limit) qs.set('limit', String(params.limit))
+  if (params.status) qs.set('status', params.status)
   const query = qs.toString()
   return apiJson<PaginatedSales>(`/sales/?${query}`, { token })
 }
 
 export function fetchSale(token: string, saleId: number) {
   return apiJson<Sale>(`/sales/${saleId}`, { token })
+}
+
+export function voidSale(token: string, saleId: number) {
+  return apiJson<Sale>(`/sales/${saleId}/void`, { method: 'POST', token })
 }
 
 export function fetchSalesSummary(token: string) {
@@ -120,6 +132,21 @@ export function healthLive() {
   return apiJson<{ status: string }>('/health/live')
 }
 
-export function fetchAudit(token: string, limit = 50) {
-  return apiJson<AuditLog[]>(`/auth/audit?limit=${limit}`, { token })
+export function fetchAudit(
+  token: string,
+  params: {
+    limit?: number
+    action?: string
+    user_id?: number
+    date_from?: string
+    date_to?: string
+  } = {},
+) {
+  const qs = new URLSearchParams()
+  qs.set('limit', String(params.limit ?? 50))
+  if (params.action) qs.set('action', params.action)
+  if (params.user_id != null) qs.set('user_id', String(params.user_id))
+  if (params.date_from) qs.set('date_from', params.date_from)
+  if (params.date_to) qs.set('date_to', params.date_to)
+  return apiJson<AuditLog[]>(`/auth/audit?${qs.toString()}`, { token })
 }

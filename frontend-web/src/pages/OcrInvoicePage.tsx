@@ -50,9 +50,25 @@ export function OcrInvoicePage() {
       const meds = result["Medicines Prescribed"] || []
       setLines(meds.length ? meds.map((name) => ({ name, quantity: 1 })) : [{ name: '', quantity: 1 }])
       await refreshInventory()
-      setStatus('OCR complete — review medicines below.')
+      if (result.warning) {
+        setStatus(result.warning)
+      } else if (!meds.length) {
+        setStatus('OCR finished but no medicines were found — add lines manually.')
+      } else {
+        setStatus('OCR complete — review medicines below.')
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'OCR failed')
+      if (err instanceof ApiError) {
+        const hint =
+          err.code === 'STORAGE_UNAVAILABLE'
+            ? ' Storage (S3/local) failed.'
+            : err.code === 'OCR_CONFIG' || err.code.startsWith('OCR_PROVIDER')
+              ? ' Check GEMINI_API_KEY / Gemini access.'
+              : ''
+        setError(`${err.message}${hint}`)
+      } else {
+        setError('OCR failed — try another image or check API configuration.')
+      }
     } finally {
       setBusy(false)
     }

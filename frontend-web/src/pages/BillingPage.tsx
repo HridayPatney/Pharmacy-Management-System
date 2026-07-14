@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { listMedicines, listSales, sellMedicines } from '../api/pharmacy'
+import { listMedicines, listSales, sellMedicines, voidSale } from '../api/pharmacy'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
@@ -78,6 +78,24 @@ export function BillingPage() {
       await refreshHistory()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Billing failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onVoid(saleId: number) {
+    if (!token) return
+    if (!confirm(`Void sale #${saleId}? Stock will be restored.`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      await voidSale(token, saleId)
+      setStatus(`Sale #${saleId} cancelled and stock restored.`)
+      if (invoice?.sale_id === saleId) setInvoice(null)
+      await refreshHistory()
+      await refreshInventory()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Void failed')
     } finally {
       setBusy(false)
     }
@@ -206,6 +224,7 @@ export function BillingPage() {
                   <th>ID</th>
                   <th>Patient</th>
                   <th>When</th>
+                  <th>Status</th>
                   <th>Total</th>
                   <th>Items</th>
                   <th />
@@ -217,9 +236,16 @@ export function BillingPage() {
                     <td>#{sale.id}</td>
                     <td>{sale.patient_name || 'Walk-in'}</td>
                     <td>{new Date(sale.created_at).toLocaleString()}</td>
+                    <td>
+                      {sale.status === 'cancelled' ? (
+                        <span className="badge warn">cancelled</span>
+                      ) : (
+                        <span className="badge ok">completed</span>
+                      )}
+                    </td>
                     <td>{sale.total.toFixed(2)}</td>
                     <td>{sale.items.length}</td>
-                    <td>
+                    <td className="row">
                       <button
                         type="button"
                         className="ghost"
@@ -247,6 +273,16 @@ export function BillingPage() {
                       >
                         PDF
                       </button>
+                      {sale.status !== 'cancelled' ? (
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={busy}
+                          onClick={() => void onVoid(sale.id)}
+                        >
+                          Void
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

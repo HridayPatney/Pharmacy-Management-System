@@ -66,6 +66,9 @@ export interface Sale {
   doctor_name: string | null
   clinic_name: string | null
   total: number
+  status: 'completed' | 'cancelled' | string
+  cancelled_at?: string | null
+  cancelled_by_user_id?: number | null
   created_at: string
   items: SaleItem[]
 }
@@ -96,11 +99,13 @@ export interface OcrResult {
   "Clinic Name": string | null
   Date: string | null
   file_key?: string
+  warning?: string
 }
 
 export interface AuditLog {
   id: number
   user_id: number
+  user_email?: string | null
   action: string
   entity_type: string
   entity_id: string | null

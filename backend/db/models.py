@@ -36,7 +36,11 @@ class User(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     audit_logs = relationship("AuditLog", back_populates="user")
-    sales = relationship("Sale", back_populates="cashier")
+    sales = relationship(
+        "Sale",
+        back_populates="cashier",
+        foreign_keys="Sale.user_id",
+    )
 
 
 class AuditLog(Base):
@@ -66,9 +70,12 @@ class Sale(Base):
     doctor_name = Column(String(255), nullable=True)
     clinic_name = Column(String(255), nullable=True)
     total = Column(Float, nullable=False)
+    status = Column(String(32), nullable=False, default="completed", index=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 
-    cashier = relationship("User", back_populates="sales")
+    cashier = relationship("User", back_populates="sales", foreign_keys=[user_id])
     items = relationship(
         "SaleItem",
         back_populates="sale",

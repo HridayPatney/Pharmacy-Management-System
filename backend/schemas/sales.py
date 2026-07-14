@@ -31,12 +31,15 @@ class SaleOut(BaseModel):
     doctor_name: str | None
     clinic_name: str | None
     total: float
+    status: str = "completed"
+    cancelled_at: datetime | None = None
+    cancelled_by_user_id: int | None = None
     created_at: datetime
     items: list[SaleItemOut] = Field(default_factory=list)
 
 
 class SaleSummary(BaseModel):
-    """Aggregate sales metrics for dashboard / billing."""
+    """Aggregate sales metrics for dashboard / billing (completed only)."""
 
     sale_count: int
     total_revenue: float

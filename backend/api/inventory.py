@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import asc, desc, or_
@@ -61,12 +61,22 @@ def list_medicines(
     low_stock: int | None = Query(
         None, ge=0, description="If set, only medicines with quantity <= this value"
     ),
+    expiry: str | None = Query(
+        None,
+        description="Filter by expiry: expired | soon | omit for none",
+    ),
+    days: int = Query(
+        30,
+        ge=1,
+        le=365,
+        description="Window (days) used when expiry=soon",
+    ),
     sort: str = Query("name", description="One of: name, quantity, price, expiry_date, id"),
     order: str = Query("asc", description="asc or desc"),
     db: Session = Depends(get_db),
     _: models.User = Depends(require_roles(*STAFF_ROLES)),
 ):
-    """Paginated inventory with optional search, low-stock filter, and sorting."""
+    """Paginated inventory with optional search, low-stock, expiry, and sorting."""
     if order.lower() not in ("asc", "desc"):
         raise HTTPException(status_code=400, detail="order must be 'asc' or 'desc'")
 
@@ -80,6 +90,22 @@ def list_medicines(
 
     if low_stock is not None:
         query = query.filter(models.Medicine.quantity <= low_stock)
+
+    if expiry:
+        normalized = expiry.strip().lower()
+        today = date.today()
+        if normalized == "expired":
+            query = query.filter(models.Medicine.expiry_date < today)
+        elif normalized == "soon":
+            query = query.filter(
+                models.Medicine.expiry_date >= today,
+                models.Medicine.expiry_date <= today + timedelta(days=days),
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="expiry must be 'expired' or 'soon'",
+            )
 
     sort_key = sort.lower()
     column = _SORT_COLUMNS.get(sort_key, models.Medicine.name)
@@ -211,6 +237,7 @@ def sell_medicines(
             doctor_name=(payload.doctor or "").strip() or None,
             clinic_name=(payload.clinic or "").strip() or None,
             total=total_price,
+            status="completed",
         )
         db.add(sale)
         db.flush()
