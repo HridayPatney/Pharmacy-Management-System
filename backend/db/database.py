@@ -1,21 +1,36 @@
-#SessionLocal & engine
+"""SQLAlchemy engine, session factory, and declarative base.
 
-# backend/db/database.py
+Database location is controlled by ``DATABASE_URL`` / project-root defaults
+in ``backend.core.config``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-# Define SQLite database URL
-DATABASE_URL = "sqlite:///./pharma.db"
+from backend.core.config import get_database_url
 
-# Create database engine (check_same_thread=False is needed for SQLite)
+DATABASE_URL = get_database_url()
+
 engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
 )
 
-# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for model definitions
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Base class for ORM models."""
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Yield a request-scoped SQLAlchemy session and close it afterward."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

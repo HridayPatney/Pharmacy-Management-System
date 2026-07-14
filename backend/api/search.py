@@ -1,25 +1,19 @@
-#Vector search API
+"""Similar-medicine vector search HTTP routes."""
 
-# backend/api/search.py
+from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import List
-from backend.services.vector_search import search_similar_medicines
+
+from backend.schemas.search import SearchRequest, SearchResult
 from backend.services.drug_api import fetch_drug_summary
+from backend.services.vector_search import search_similar_medicines
 
 router = APIRouter()
 
-class SearchRequest(BaseModel):
-    medicine_name: str
-    top_k: int = 5
 
-class SearchResult(BaseModel):
-    name: str
-    score: float
-
-@router.post("/similar", response_model=List[SearchResult])
+@router.post("/similar", response_model=list[SearchResult])
 def find_similar(request: SearchRequest):
+    """Find inventory medicines whose embeddings are close to ``medicine_name``."""
     summary = fetch_drug_summary(request.medicine_name)
     if not summary or summary == "No data found.":
         raise HTTPException(status_code=404, detail="Summary not found for the requested medicine")
