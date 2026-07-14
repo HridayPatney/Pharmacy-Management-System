@@ -1,4 +1,8 @@
 
+"""Experimental drugs.com scraper (Playwright + BeautifulSoup).
+
+Not used by the production API. Requires ``playwright`` and ``beautifulsoup4``.
+"""
 
 
 # drug_scraper.py

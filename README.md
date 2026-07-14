@@ -102,6 +102,7 @@ docs/             Environment and operational docs
 
 - [Environment variables & secrets](docs/environment.md)
 - [Backend architecture](docs/architecture.md)
+- [Vector search / reindex](docs/vector-search.md)
 - [Testing](docs/testing.md)
 - [Dependency files](docs/dependencies.md)
 

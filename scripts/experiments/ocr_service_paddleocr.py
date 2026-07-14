@@ -1,10 +1,15 @@
-# ocr_service.py
+"""Experimental PaddleOCR prescription parser (unused by production).
+
+Production OCR uses Gemini via ``backend.services.ocr_service``.
+Requires a separate PaddleOCR install; do not import this from the API.
+"""
+
 from paddleocr import PaddleOCR
 import re
 import os
 
-# Initialize OCR engine
-ocr = PaddleOCR(use_angle_cls=True, lang='en')  # Use English OCR
+# Initialize OCR engine only when this experimental script is run as a module
+ocr = PaddleOCR(use_angle_cls=True, lang="en")
 
 def extract_prescription_text(image_path: str) -> dict:
     result = ocr.ocr(image_path)
