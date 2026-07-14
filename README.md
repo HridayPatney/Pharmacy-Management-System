@@ -82,6 +82,17 @@ streamlit run frontend/app.py
 
 Default UI: [http://localhost:8501](http://localhost:8501). The UI calls `http://localhost:8000`.
 
+### 7. Run the React UI (recommended)
+
+```bash
+cd frontend-web
+cp .env.example .env
+npm install
+npm run dev
+```
+
+App: [http://localhost:5173](http://localhost:5173). Set backend `CORS_ORIGINS` to include `http://localhost:5173`. See [frontend-web/README.md](frontend-web/README.md).
+
 ## Project layout
 
 ```
