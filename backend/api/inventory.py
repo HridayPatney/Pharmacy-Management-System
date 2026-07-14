@@ -11,10 +11,7 @@ from backend.db import models
 from backend.db.database import get_db
 from backend.schemas.inventory import MedicineSchema, SellRequest, SellResponse
 from backend.services.drug_api import fetch_drug_summary
-from backend.services.vector_search import (
-    add_medicine_to_vector_db,
-    delete_medicine_from_vector_db,
-)
+from backend.services.vector_sync import remove_medicine_embedding, sync_medicine_embedding
 
 router = APIRouter()
 
@@ -30,7 +27,7 @@ def add_medicine(med: MedicineSchema, db: Session = Depends(get_db)):
     db.refresh(new_med)
 
     summary = fetch_drug_summary(new_med.name) or ""
-    add_medicine_to_vector_db(new_med.id, new_med.name, summary)
+    sync_medicine_embedding(new_med.id, new_med.name, summary)
 
     return new_med
 
@@ -51,7 +48,7 @@ def delete_medicine(med_id: str, db: Session = Depends(get_db)):
     db.delete(med)
     db.commit()
 
-    delete_medicine_from_vector_db(med_id)
+    remove_medicine_embedding(med_id)
 
     return {"detail": f"Medicine {med_id} deleted from database and vector index"}
 
@@ -69,8 +66,8 @@ def update_medicine(med_id: str, med_update: MedicineSchema, db: Session = Depen
     db.refresh(med)
 
     summary = fetch_drug_summary(med_update.name) or ""
-    delete_medicine_from_vector_db(med_id)
-    add_medicine_to_vector_db(med_id, med_update.name, summary)
+    # Upsert replaces any prior embedding for this id inside the vector service.
+    sync_medicine_embedding(med_id, med_update.name, summary)
 
     return med
 
@@ -83,31 +80,57 @@ def get_low_stock(threshold: int = 10, db: Session = Depends(get_db)):
 
 @router.post("/sell", response_model=SellResponse)
 def sell_medicines(payload: SellRequest, db: Session = Depends(get_db)):
-    """Decrement stock by medicine name and return an invoice payload for the UI."""
+    """Decrement stock for all lines in one SQLite transaction and return an invoice.
+
+    Validates every line before mutating. On any failure the whole sell is rolled back
+    so earlier lines are not partially committed.
+    """
+    if not payload.medicines:
+        raise HTTPException(status_code=400, detail="Sell request must include at least one medicine.")
+
     sold_items = []
     total_price = 0.0
+    # Track ORM rows with intended decrements so we apply only after full validation.
+    planned: list[tuple[models.Medicine, int, str]] = []
 
-    for item in payload.medicines:
-        name = item.name
-        qty = item.quantity
+    try:
+        for item in payload.medicines:
+            name = item.name.strip()
+            qty = item.quantity
 
-        medicine = db.query(models.Medicine).filter(models.Medicine.name == name).first()
+            medicine = (
+                db.query(models.Medicine)
+                .filter(models.Medicine.name == name)
+                .first()
+            )
 
-        if not medicine:
-            raise HTTPException(status_code=404, detail=f"Medicine {name} not found.")
-        if medicine.quantity < qty:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for {name}.")
+            if not medicine:
+                raise HTTPException(status_code=404, detail=f"Medicine {name} not found.")
+            if medicine.quantity < qty:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient stock for {name}.",
+                )
 
-        medicine.quantity -= qty
+            planned.append((medicine, qty, name))
+
+        for medicine, qty, name in planned:
+            medicine.quantity -= qty
+            sold_items.append({
+                "name": name,
+                "quantity": qty,
+                "unit_price": medicine.price,
+                "subtotal": medicine.price * qty,
+            })
+            total_price += medicine.price * qty
+
         db.commit()
-
-        sold_items.append({
-            "name": name,
-            "quantity": qty,
-            "unit_price": medicine.price,
-            "subtotal": medicine.price * qty,
-        })
-        total_price += medicine.price * qty
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "invoice": {
