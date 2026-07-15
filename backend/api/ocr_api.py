@@ -77,6 +77,12 @@ def _ocr_provider_error(exc: Exception) -> HTTPException:
     elif "quota" in lower or "rate" in lower or "429" in lower:
         message = "Gemini rate limit/quota hit. Wait a moment and retry OCR."
         code = "OCR_PROVIDER_QUOTA"
+    elif "404" in lower or "not found" in lower or "is not found" in lower:
+        message = (
+            "Gemini model is unavailable. Set GEMINI_OCR_MODEL to a current model "
+            "(e.g. gemini-2.5-flash) and redeploy."
+        )
+        code = "OCR_PROVIDER_MODEL"
     elif "winerror 32" in lower or "being used by another process" in lower:
         message = (
             "Temporary image file was locked on Windows during OCR. "

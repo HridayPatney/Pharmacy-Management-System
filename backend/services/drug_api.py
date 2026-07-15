@@ -86,7 +86,7 @@ def fetch_from_gemini(drug_name):
             f"If you do not recognize it as a medicine, reply exactly: UNKNOWN"
         )
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=os.getenv("GEMINI_OCR_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash",
             contents=prompt,
         )
         text = (getattr(response, "text", None) or "").strip()
