@@ -234,28 +234,35 @@ export function OcrInvoicePage() {
 
         {Object.keys(alts).length > 0 ? (
           <div className="stack">
-            <h2>Alternatives</h2>
+            <h2>Alternatives (in-stock inventory)</h2>
             {Object.entries(alts).map(([name, results]) => (
               <div key={name}>
                 <strong>{name}</strong>
-                <ul>
-                  {results.map((r) => (
-                    <li key={r.name}>
-                      {r.name}{' '}
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() =>
-                          setLines((prev) =>
-                            prev.map((l) => (l.name.trim() === name ? { ...l, name: r.name } : l)),
-                          )
-                        }
-                      >
-                        Use
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                {results.length === 0 ? (
+                  <p className="muted">No other in-stock alternatives found.</p>
+                ) : (
+                  <ul>
+                    {results.map((r) => (
+                      <li key={r.name}>
+                        {r.name}
+                        {r.quantity != null ? ` (stock ${r.quantity})` : ''}{' '}
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            setLines((prev) =>
+                              prev.map((l) =>
+                                l.name.trim() === name ? { ...l, name: r.name } : l,
+                              ),
+                            )
+                          }
+                        >
+                          Use
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ))}
           </div>
