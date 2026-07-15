@@ -17,3 +17,7 @@ class SearchResult(BaseModel):
 
     name: str
     score: float
+    quantity: int | None = Field(
+        default=None,
+        description="Current on-hand stock when filtered to inventory",
+    )

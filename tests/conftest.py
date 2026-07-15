@@ -40,7 +40,10 @@ def _stub_ml_modules() -> MagicMock:
     vector_mod.add_medicine_to_vector_db = MagicMock()
     vector_mod.delete_medicine_from_vector_db = MagicMock()
     vector_mod.search_similar_medicines = MagicMock(
-        return_value=[{"name": "Aspirin", "score": 0.1}]
+        return_value=[
+            {"name": "Aspirin", "score": 0.05},
+            {"name": "Ibuprofen", "score": 0.2},
+        ]
     )
     fake_collection = MagicMock()
     fake_collection.count.return_value = 0

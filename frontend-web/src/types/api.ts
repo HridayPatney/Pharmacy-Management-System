@@ -90,6 +90,7 @@ export interface SaleSummary {
 export interface SearchResult {
   name: string
   score: number
+  quantity?: number | null
 }
 
 export interface OcrResult {
