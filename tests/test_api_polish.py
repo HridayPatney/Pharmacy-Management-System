@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from io import BytesIO
-from pathlib import Path
 
 
 def test_health_live(client):

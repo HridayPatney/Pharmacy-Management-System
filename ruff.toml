@@ -1,0 +1,8 @@
+# Ruff config for PharmaAssist backend/tests.
+# Keep rules close to defaults so CI stays useful without a mass cleanup PR.
+target-version = "py312"
+line-length = 100
+
+[lint]
+# Default-equivalent: pycodestyle errors + pyflakes
+select = ["E4", "E7", "E9", "F"]
