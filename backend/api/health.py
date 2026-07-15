@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from fastapi import APIRouter
@@ -9,7 +10,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from backend.core.config import get_gemini_api_key
-import os
 from backend.db.database import SessionLocal
 
 router = APIRouter()

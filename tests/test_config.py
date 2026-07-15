@@ -8,7 +8,12 @@ import backend.core.config as config
 def test_cors_origins_default(monkeypatch):
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
     config.get_cors_origins.cache_clear()
-    assert config.get_cors_origins() == ["http://localhost:8501"]
+    assert config.get_cors_origins() == [
+        "http://localhost:8501",
+        "http://127.0.0.1:8501",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
 
 def test_cors_origins_comma_separated(monkeypatch):
