@@ -24,6 +24,13 @@ class RegisterRequest(BaseModel):
     role: Role = Role.CASHIER
 
 
+class UserUpdateRequest(BaseModel):
+    """Partial update for ``PATCH /auth/users/{id}`` (admin only)."""
+
+    role: Role | None = None
+    is_active: bool | None = None
+
+
 class UserOut(BaseModel):
     """Public user profile."""
 

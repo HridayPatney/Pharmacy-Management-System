@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
 import { AppLayout } from './layout/AppLayout'
 import { AccountPage } from './pages/AccountPage'
+import { AdminPage } from './pages/AdminPage'
 import { BillingPage } from './pages/BillingPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { InventoryPage } from './pages/InventoryPage'
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/ocr" element={<OcrInvoicePage />} />
+            <Route path="/admin" element={<AdminPage />} />
             <Route path="/account" element={<AccountPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

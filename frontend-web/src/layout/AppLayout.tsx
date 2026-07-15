@@ -1,5 +1,5 @@
 import { NavLink, Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { canManageStaff, useAuth } from '../auth/AuthContext'
 
 export function AppLayout() {
   const { user, loading, logout } = useAuth()
@@ -38,6 +38,11 @@ export function AppLayout() {
           <NavLink to="/ocr" className={({ isActive }) => (isActive ? 'active' : '')}>
             OCR
           </NavLink>
+          {canManageStaff(user.role) ? (
+            <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Admin
+            </NavLink>
+          ) : null}
           <NavLink to="/account" className={({ isActive }) => (isActive ? 'active' : '')}>
             Account
           </NavLink>

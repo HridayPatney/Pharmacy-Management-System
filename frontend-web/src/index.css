@@ -285,6 +285,54 @@ th {
   padding: 0.75rem 0.9rem;
 }
 
+.notice-box {
+  background: rgba(15, 122, 101, 0.1);
+  color: var(--accent-deep);
+  border: 1px solid rgba(15, 122, 101, 0.25);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+}
+
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button.tab {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+button.tab.active {
+  background: rgba(15, 122, 101, 0.12);
+  border-color: rgba(15, 122, 101, 0.35);
+  color: var(--accent-deep);
+}
+
+a.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+}
+
+a.button-link.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+a.button-link.primary:hover {
+  background: var(--accent-deep);
+}
+
 .login-page {
   min-height: 100vh;
   display: grid;

@@ -16,7 +16,9 @@ PharmaAssist uses **JWT Bearer** tokens and role-based access control.
 |--------|------|------|
 | POST | `/auth/login` | Public |
 | GET | `/auth/me` | Any staff |
+| GET | `/auth/users` | Admin |
 | POST | `/auth/register` | Admin |
+| PATCH | `/auth/users/{id}` | Admin |
 | GET | `/auth/audit` | Admin |
 
 Inventory, search, and OCR routes require a valid Bearer token.
@@ -44,8 +46,12 @@ curl -X POST http://localhost:8000/auth/login \
 
 ## Audit
 
-Successful **sell** and **delete** actions write rows to `audit_logs` (who, action, entity, JSON details). Admins list them via `GET /auth/audit`.
+Successful **sell**, **delete**, **staff register**, and **staff update** actions write rows to `audit_logs` (who, action, entity, JSON details). Admins list them via `GET /auth/audit` or the React **Admin** page (`/admin`).
+
+Staff management rules:
+- Admins cannot deactivate their own account.
+- The last active admin cannot be demoted or deactivated.
 
 ## Streamlit note
 
-The current Streamlit UI does not yet send JWTs. After this change the API rejects unauthenticated inventory/OCR calls. Point the React/Streamlit client at `/auth/login` and attach the token, or use `/docs` to exercise the API while the UI catches up.
+The Streamlit UI does not send JWTs. Prefer the React app for auth-aware flows (`frontend-web`).
