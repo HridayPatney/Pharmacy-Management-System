@@ -38,6 +38,9 @@ export function AppLayout() {
           <NavLink to="/ocr" className={({ isActive }) => (isActive ? 'active' : '')}>
             OCR
           </NavLink>
+          <NavLink to="/chat" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Chat
+          </NavLink>
           {canManageStaff(user.role) ? (
             <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')}>
               Admin

@@ -114,6 +114,16 @@ export interface AuditLog {
   created_at: string
 }
 
+export interface AgentQueryResponse {
+  answer: string
+  tool: string | null
+  mode?: string
+  sql?: string | null
+  args: Record<string, unknown>
+  row_count: number
+  rows: Record<string, unknown>[]
+}
+
 export interface ApiErrorBody {
   error: {
     code: string

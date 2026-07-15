@@ -1,5 +1,6 @@
 import { apiForm, apiJson } from './client'
 import type {
+  AgentQueryResponse,
   AuditLog,
   Medicine,
   OcrResult,
@@ -176,4 +177,12 @@ export function fetchAudit(
   if (params.date_from) qs.set('date_from', params.date_from)
   if (params.date_to) qs.set('date_to', params.date_to)
   return apiJson<AuditLog[]>(`/auth/audit?${qs.toString()}`, { token })
+}
+
+export function askAgent(token: string, question: string) {
+  return apiJson<AgentQueryResponse>('/agent/query', {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ question }),
+  })
 }
