@@ -80,7 +80,7 @@ def _ocr_provider_error(exc: Exception) -> HTTPException:
     elif "404" in lower or "not found" in lower or "is not found" in lower:
         message = (
             "Gemini model is unavailable. Set GEMINI_OCR_MODEL to a current model "
-            "(e.g. gemini-2.5-flash) and redeploy."
+            "(e.g. gemini-3-flash-preview) and redeploy."
         )
         code = "OCR_PROVIDER_MODEL"
     elif "winerror 32" in lower or "being used by another process" in lower:

@@ -69,7 +69,7 @@ def extract_json(image_path: str) -> dict:
     from google.genai import types
 
     # Prefer a current Flash model; override with GEMINI_OCR_MODEL if needed.
-    model = os.getenv("GEMINI_OCR_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+    model = os.getenv("GEMINI_OCR_MODEL", "gemini-3-flash-preview").strip() or "gemini-3-flash-preview"
 
     client = genai.Client(api_key=get_gemini_api_key())
     file = client.files.upload(file=image_path)
