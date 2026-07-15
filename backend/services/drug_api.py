@@ -1,8 +1,8 @@
 # drug_info_pipeline.py
 
-import requests
 import time
-import json
+
+import requests
 
 # Wikimedia requires a descriptive User-Agent (403 without one).
 _HTTP_HEADERS = {
