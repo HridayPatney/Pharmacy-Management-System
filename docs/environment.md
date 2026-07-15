@@ -10,7 +10,9 @@ PharmaAssist loads configuration from the process environment and optionally fro
 | `JWT_EXPIRE_MINUTES` | No | `60` | Access token lifetime |
 | `BOOTSTRAP_ADMIN_EMAIL` | First boot | _(none)_ | Seed admin when users table empty |
 | `BOOTSTRAP_ADMIN_PASSWORD` | First boot | _(none)_ | Seed admin password |
-| `GEMINI_API_KEY` | Yes for OCR | _(none)_ | Google Gemini API key used by `POST /ocr/extract` |
+| `GEMINI_API_KEY` | Yes for OCR / agent NL planning | _(none)_ | Google Gemini API key used by `POST /ocr/extract` and inventory chat planning |
+| `GEMINI_OCR_MODEL` | No | `gemini-3-flash-preview` | Model for OCR (and agent if `GEMINI_AGENT_MODEL` unset) |
+| `GEMINI_AGENT_MODEL` | No | same as OCR model | Optional override for `POST /agent/query` tool planning |
 | `CORS_ORIGINS` | No | `http://localhost:8501` | Comma-separated allowed origins for the FastAPI CORS middleware |
 | `DATABASE_URL` | No | `sqlite:///<repo>/pharma.db` | SQLAlchemy URL (Render Postgres in production) |
 | `CHROMA_PATH` | No | `<repo>/chroma_store` | Persistent Chroma directory |
