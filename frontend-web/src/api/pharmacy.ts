@@ -24,6 +24,33 @@ export function fetchMe(token: string) {
   return apiJson<User>('/auth/me', { token })
 }
 
+export function listUsers(token: string) {
+  return apiJson<User[]>('/auth/users', { token })
+}
+
+export function registerUser(
+  token: string,
+  payload: { email: string; password: string; role: User['role'] },
+) {
+  return apiJson<User>('/auth/register', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateUser(
+  token: string,
+  userId: number,
+  payload: { role?: User['role']; is_active?: boolean },
+) {
+  return apiJson<User>(`/auth/users/${userId}`, {
+    method: 'PATCH',
+    token,
+    body: JSON.stringify(payload),
+  })
+}
+
 export function listMedicines(
   token: string,
   params: {

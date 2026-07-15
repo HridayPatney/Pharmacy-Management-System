@@ -18,9 +18,30 @@ from backend.schemas.auth import (
     RegisterRequest,
     TokenResponse,
     UserOut,
+    UserUpdateRequest,
 )
+from backend.services.audit import write_audit
 
 router = APIRouter()
+
+
+def _active_admin_count(db: Session) -> int:
+    return (
+        db.query(models.User)
+        .filter(models.User.role == Role.ADMIN.value, models.User.is_active.is_(True))
+        .count()
+    )
+
+
+def _ensure_not_last_active_admin(db: Session, target: models.User, *, new_role: str, new_active: bool) -> None:
+    """Block changes that would leave the system with zero active admins."""
+    was_active_admin = target.role == Role.ADMIN.value and target.is_active
+    stays_active_admin = new_role == Role.ADMIN.value and new_active
+    if was_active_admin and not stays_active_admin and _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot remove or deactivate the last active admin",
+        )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -42,11 +63,20 @@ def me(user: models.User = Depends(get_current_user)):
     return user
 
 
+@router.get("/users", response_model=list[UserOut])
+def list_users(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_roles(Role.ADMIN)),
+):
+    """List all staff accounts (admin only)."""
+    return db.query(models.User).order_by(models.User.id.asc()).all()
+
+
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(
     payload: RegisterRequest,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_roles(Role.ADMIN)),
+    admin: models.User = Depends(require_roles(Role.ADMIN)),
 ):
     """Create a staff user (admin only)."""
     email = payload.email.lower()
@@ -60,9 +90,59 @@ def register(
         is_active=True,
     )
     db.add(user)
+    db.flush()
+    write_audit(
+        db,
+        user=admin,
+        action="auth.user.register",
+        entity_type="user",
+        entity_id=str(user.id),
+        details={"email": user.email, "role": user.role},
+    )
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: int,
+    payload: UserUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_roles(Role.ADMIN)),
+):
+    """Update a staff member's role or active status (admin only)."""
+    if payload.role is None and payload.is_active is None:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if target.id == admin.id and payload.is_active is False:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+
+    new_role = payload.role.value if payload.role is not None else target.role
+    new_active = payload.is_active if payload.is_active is not None else target.is_active
+    _ensure_not_last_active_admin(db, target, new_role=new_role, new_active=new_active)
+
+    before = {"role": target.role, "is_active": target.is_active}
+    if payload.role is not None:
+        target.role = payload.role.value
+    if payload.is_active is not None:
+        target.is_active = payload.is_active
+
+    write_audit(
+        db,
+        user=admin,
+        action="auth.user.update",
+        entity_type="user",
+        entity_id=str(target.id),
+        details={"before": before, "after": {"role": target.role, "is_active": target.is_active}},
+    )
+    db.commit()
+    db.refresh(target)
+    return target
 
 
 @router.get("/audit", response_model=list[AuditLogOut])

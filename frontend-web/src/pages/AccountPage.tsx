@@ -1,38 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
-import { fetchAudit, fetchMe } from '../api/pharmacy'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { fetchMe } from '../api/pharmacy'
 import { ApiError } from '../api/client'
-import { useAuth } from '../auth/AuthContext'
-import type { AuditLog, User } from '../types/api'
-
-const ACTION_OPTIONS = [
-  '',
-  'inventory.sell',
-  'sale.void',
-  'medicine.delete',
-]
+import { canManageStaff, useAuth } from '../auth/AuthContext'
+import type { User } from '../types/api'
 
 export function AccountPage() {
   const { token, user, logout, refreshUser } = useAuth()
   const [profile, setProfile] = useState<User | null>(user)
-  const [audit, setAudit] = useState<AuditLog[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [action, setAction] = useState('')
-  const [userId, setUserId] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-
-  const loadAudit = useCallback(async () => {
-    if (!token || !profile || profile.role !== 'admin') return
-    const rows = await fetchAudit(token, {
-      limit: 80,
-      action: action || undefined,
-      user_id: userId.trim() ? Number(userId) : undefined,
-      date_from: dateFrom ? new Date(`${dateFrom}T00:00:00Z`).toISOString() : undefined,
-      date_to: dateTo ? new Date(`${dateTo}T23:59:59Z`).toISOString() : undefined,
-    })
-    setAudit(rows)
-  }, [token, profile, action, userId, dateFrom, dateTo])
 
   useEffect(() => {
     if (!token) return
@@ -55,16 +32,6 @@ export function AccountPage() {
       cancelled = true
     }
   }, [token])
-
-  useEffect(() => {
-    if (!profile || profile.role !== 'admin') {
-      setAudit([])
-      return
-    }
-    void loadAudit().catch((err) => {
-      setError(err instanceof ApiError ? err.message : 'Failed to load audit log')
-    })
-  }, [profile, loadAudit])
 
   return (
     <div className="stack">
@@ -124,74 +91,17 @@ export function AccountPage() {
         </div>
       </section>
 
-      {profile?.role === 'admin' ? (
+      {canManageStaff(profile?.role) ? (
         <section className="panel stack">
-          <h2>Audit log</h2>
-          <p className="muted">Filter by action, user, and date range (admin only).</p>
+          <h2>Administration</h2>
+          <p className="muted">
+            Staff accounts and the audit log live on the Admin dashboard.
+          </p>
           <div className="row">
-            <label>
-              Action
-              <select value={action} onChange={(e) => setAction(e.target.value)}>
-                {ACTION_OPTIONS.map((opt) => (
-                  <option key={opt || 'all'} value={opt}>
-                    {opt || 'All actions'}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              User ID
-              <input
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                placeholder="e.g. 1"
-              />
-            </label>
-            <label>
-              From
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-            </label>
-            <label>
-              To
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-            </label>
-            <button type="button" className="ghost" onClick={() => void loadAudit()}>
-              Apply
-            </button>
+            <Link to="/admin" className="button-link primary">
+              Open Admin dashboard
+            </Link>
           </div>
-          {audit.length === 0 ? (
-            <p className="muted">No audit entries for these filters.</p>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Entity</th>
-                    <th>Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {audit.map((row) => (
-                    <tr key={row.id}>
-                      <td>{new Date(row.created_at).toLocaleString()}</td>
-                      <td>
-                        {row.user_email || `#${row.user_id}`}
-                      </td>
-                      <td>{row.action}</td>
-                      <td>
-                        {row.entity_type}
-                        {row.entity_id ? ` #${row.entity_id}` : ''}
-                      </td>
-                      <td>{row.details || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </section>
       ) : null}
     </div>

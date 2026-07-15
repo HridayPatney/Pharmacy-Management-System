@@ -79,3 +79,7 @@ export function useAuth(): AuthState {
 export function canWriteInventory(role: string | undefined): boolean {
   return role === 'admin' || role === 'pharmacist'
 }
+
+export function canManageStaff(role: string | undefined): boolean {
+  return role === 'admin'
+}
