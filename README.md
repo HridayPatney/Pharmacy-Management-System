@@ -132,8 +132,3 @@ pytest -q
 
 See [docs/testing.md](docs/testing.md).
 
-## Security notes
-
-- Do not commit `.env` or API keys.
-- If a Gemini key was ever checked into git, rotate it immediately.
-- Virtual environments (`venv/`) must never be committed.
