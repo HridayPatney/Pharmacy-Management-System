@@ -57,3 +57,34 @@ def test_similar_excludes_self_and_requires_stock(
     assert "Simvastatin" not in names  # zero stock
     assert names == ["Atorvastatin"]
     assert body[0]["quantity"] == 12
+
+
+def test_similar_falls_back_when_drug_summary_missing(
+    client, pharmacist_headers, vector_mocks, monkeypatch
+):
+    today = date.today()
+    base = {
+        "dosage": "10mg",
+        "price": 4.0,
+        "expiry_date": (today + timedelta(days=200)).isoformat(),
+    }
+    client.post(
+        "/inventory/add",
+        json={"id": "ato-2", "name": "Atorvastatin", "quantity": 8, **base},
+        headers=pharmacist_headers,
+    )
+    monkeypatch.setattr(
+        "backend.api.search.fetch_drug_summary",
+        lambda _name: "No data found.",
+    )
+    vector_mocks.search_similar_medicines.return_value = [
+        {"name": "Atorvastatin", "score": 0.2},
+    ]
+
+    res = client.post(
+        "/search/similar",
+        json={"medicine_name": "Lipitor", "top_k": 5},
+        headers=pharmacist_headers,
+    )
+    assert res.status_code == 200
+    assert res.json()[0]["name"] == "Atorvastatin"

@@ -71,7 +71,14 @@ export function BillingPage() {
         if (!name) continue
         const stock = map.get(name.toLowerCase())
         if (!stock || stock.quantity < line.quantity) {
-          nextAlts[name] = await searchSimilar(token, name, 8)
+          try {
+            nextAlts[name] = await searchSimilar(token, name, 8)
+          } catch (err) {
+            nextAlts[name] = []
+            if (err instanceof ApiError && err.status !== 404) {
+              throw err
+            }
+          }
         }
       }
       setAlts(nextAlts)
