@@ -29,12 +29,18 @@ Changing `CHROMA_COLLECTION` without reindexing makes similarity results wrong o
 
 ## Reindex
 
-1. Stop the API process.
-2. Optionally delete or rename the old `CHROMA_PATH` directory (backup first).
-3. Set the new env vars in `.env`.
-4. Restart the API and re-add medicines (inventory **update** or **add**), or run
-   `python scripts/experiments/load_medicines_to_vector_db.py` for a sample seed.
-5. Confirm with `python scripts/view_vector_db.py`.
+When ``chroma_store`` is wiped or search returns empty while inventory still
+has medicines, rebuild embeddings from SQL:
 
-Response shape for `POST /search/similar` remains `[{ "name", "score" }]` where
-`score` is Chroma distance (lower is closer).
+1. **API (pharmacist/admin):** ``POST /search/reindex`` — queues a background
+   embedding job per medicine (inline under ``VECTOR_SYNC_INLINE=1`` in tests).
+2. **UI:** Inventory → **Rebuild search embeddings**.
+3. **CLI:** ``python scripts/reindex_vectors.py`` (runs sync inline).
+
+Optional: delete or rename the old ``CHROMA_PATH`` directory first if the
+collection/model changed.
+
+Confirm with ``python scripts/view_vector_db.py``.
+
+Response shape for ``POST /search/similar`` remains ``[{ "name", "score" }]`` where
+``score`` is Chroma distance (lower is closer).

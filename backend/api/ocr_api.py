@@ -7,13 +7,19 @@ import tempfile
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 
 from backend.core.deps import require_roles
 from backend.core.roles import STAFF_ROLES
 from backend.db import models
 from backend.services.ocr_service import extract_json
-from backend.services.storage import build_prescription_key, get_storage
+from backend.services.storage import (
+    build_prescription_key,
+    get_storage,
+    guess_content_type,
+    validate_prescription_key,
+)
 
 router = APIRouter()
 
@@ -167,3 +173,42 @@ async def extract(
         raise _ocr_provider_error(e) from e
     finally:
         _safe_unlink(image_path)
+
+
+@router.get("/prescription")
+def get_prescription(
+    key: str = Query(..., min_length=1, description="Object key returned as file_key"),
+    _: models.User = Depends(require_roles(*STAFF_ROLES)),
+):
+    """Return the stored prescription image (local disk or S3) for staff review."""
+    try:
+        safe_key = validate_prescription_key(key)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "PRESCRIPTION_KEY_INVALID", "message": str(exc)},
+        ) from exc
+
+    try:
+        storage = get_storage()
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+
+    try:
+        data = storage.read_bytes(safe_key)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "PRESCRIPTION_NOT_FOUND",
+                "message": "No prescription image found for that key.",
+            },
+        ) from exc
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+
+    return Response(
+        content=data,
+        media_type=guess_content_type(safe_key),
+        headers={"Content-Disposition": f'inline; filename="{Path(safe_key).name}"'},
+    )

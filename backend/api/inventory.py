@@ -232,6 +232,7 @@ def sell_medicines(
             })
             total_price += medicine.price * qty
 
+        rx_key = (payload.prescription_file_key or "").strip() or None
         sale = models.Sale(
             user_id=user.id,
             patient_name=(payload.patient or "").strip() or None,
@@ -239,6 +240,7 @@ def sell_medicines(
             clinic_name=(payload.clinic or "").strip() or None,
             total=total_price,
             status="completed",
+            prescription_file_key=rx_key,
         )
         db.add(sale)
         db.flush()
@@ -261,7 +263,7 @@ def sell_medicines(
             action="inventory.sell",
             entity_type="sale",
             entity_id=str(sale.id),
-            details={"items": sold_items, "total": total_price},
+            details={"items": sold_items, "total": total_price, "prescription_file_key": rx_key},
         )
         db.commit()
         db.refresh(sale)

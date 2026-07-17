@@ -75,6 +75,18 @@ export async function apiForm<T>(
   return (await res.json()) as T
 }
 
+/** Authenticated binary download (prescription images). */
+export async function apiBlob(
+  path: string,
+  token?: string | null,
+): Promise<Blob> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: authHeaders(token),
+  })
+  if (!res.ok) await parseError(res)
+  return res.blob()
+}
+
 export function getApiUrl(): string {
   return API_URL
 }

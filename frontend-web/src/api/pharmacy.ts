@@ -1,4 +1,4 @@
-import { apiForm, apiJson } from './client'
+import { apiBlob, apiForm, apiJson } from './client'
 import type {
   AgentQueryResponse,
   AuditLog,
@@ -104,7 +104,12 @@ export function deleteMedicine(token: string, id: string) {
 export function sellMedicines(
   token: string,
   medicines: { name: string; quantity: number }[],
-  meta: { patient?: string; doctor?: string; clinic?: string } = {},
+  meta: {
+    patient?: string
+    doctor?: string
+    clinic?: string
+    prescription_file_key?: string
+  } = {},
 ) {
   return apiJson<SellResponse>('/inventory/sell', {
     method: 'POST',
@@ -114,6 +119,7 @@ export function sellMedicines(
       patient: meta.patient || null,
       doctor: meta.doctor || null,
       clinic: meta.clinic || null,
+      prescription_file_key: meta.prescription_file_key || null,
     }),
   })
 }
@@ -154,6 +160,22 @@ export function extractOcr(token: string, file: File) {
   const form = new FormData()
   form.append('file', file)
   return apiForm<OcrResult>('/ocr/extract', form, token)
+}
+
+export function reindexEmbeddings(token: string) {
+  return apiJson<{ scheduled: number; message: string }>('/search/reindex', {
+    method: 'POST',
+    token,
+  })
+}
+
+export async function openPrescription(token: string, fileKey: string) {
+  const qs = new URLSearchParams({ key: fileKey })
+  const blob = await apiBlob(`/ocr/prescription?${qs.toString()}`, token)
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener,noreferrer')
+  // Revoke after the new tab has a chance to load.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 export function healthLive() {

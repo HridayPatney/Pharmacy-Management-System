@@ -44,6 +44,7 @@ describe('pharmacy API helpers', () => {
       patient: null,
       doctor: null,
       clinic: null,
+      prescription_file_key: null,
     })
   })
 })

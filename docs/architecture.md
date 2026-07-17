@@ -47,7 +47,7 @@ SQL and Chroma are **not** one ACID transaction across processes.
 | SQL OK, Chroma fails later | Inventory change is kept; failure is **logged**; HTTP still **200** (indexing is best-effort / background) |
 | Both OK | Normal 200 response |
 
-Do **not** roll back SQL when Chroma fails: stock accuracy beats search freshness. To repair search, re-run update (or delete/re-add) for the affected medicine. Set `VECTOR_SYNC_INLINE=1` in tests to run indexing on the request thread.
+Do **not** roll back SQL when Chroma fails: stock accuracy beats search freshness. To repair search after a wipe, use ``POST /search/reindex`` (or update individual medicines). Set `VECTOR_SYNC_INLINE=1` in tests to run indexing on the request thread.
 
 ## API contracts (do not break without a UI migration)
 
@@ -62,9 +62,17 @@ Do **not** roll back SQL when Chroma fails: stock accuracy beats search freshnes
 | PUT | `/inventory/update/{med_id}` | Full replace + re-embed |
 | DELETE | `/inventory/delete/{med_id}` | SQLite/Postgres + Chroma |
 | GET | `/inventory/low-stock` | `threshold` query (default 10) |
-| POST | `/inventory/sell` | `{ "medicines": [{ "name", "quantity" }] }` → `{ "invoice": { items, total, timestamp } }` |
+| POST | `/inventory/sell` | `{ medicines, patient?, doctor?, clinic?, prescription_file_key? }` → invoice |
 | POST | `/search/similar` | `{ medicine_name, top_k? }` → `[{ name, score }]` (score = distance) |
+| POST | `/search/reindex` | Pharmacist/admin — rebuild Chroma from all SQL medicines |
 | POST | `/ocr/extract` | Multipart image → prescription JSON + `file_key` |
+| GET | `/ocr/prescription` | `?key=` — staff download/view stored Rx image |
+
+Prescription uploads are durable (local or S3). Selling from OCR can attach
+`prescription_file_key` on the ``Sale`` row so billing history can open the
+original image. If Chroma is wiped, call ``POST /search/reindex`` (or
+``scripts/reindex_vectors.py``) instead of manually re-adding every medicine.
+
 
 ## Schemas
 

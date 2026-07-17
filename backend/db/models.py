@@ -73,6 +73,7 @@ class Sale(Base):
     status = Column(String(32), nullable=False, default="completed", index=True)
     cancelled_at = Column(DateTime, nullable=True)
     cancelled_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    prescription_file_key = Column(String(512), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     cashier = relationship("User", back_populates="sales", foreign_keys=[user_id])

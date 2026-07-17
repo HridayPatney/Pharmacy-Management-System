@@ -119,3 +119,17 @@ def sync_medicine_embedding(medicine_id: str, medicine_name: str, summary: str) 
 def remove_medicine_embedding(medicine_id: str) -> None:
     """Schedule delete; does not raise HTTP errors."""
     schedule_remove_medicine_embedding(medicine_id)
+
+
+def reindex_all_medicines(db: Any) -> dict[str, int]:
+    """Queue embedding rebuild for every medicine in SQL inventory.
+
+    Use after ``chroma_store`` is wiped or lost. SQLite/Postgres remains the
+    source of truth; this only re-populates Chroma.
+    """
+    from backend.db import models
+
+    rows = db.query(models.Medicine).order_by(models.Medicine.name).all()
+    for med in rows:
+        schedule_medicine_embedding_fetch(med.id, med.name)
+    return {"scheduled": len(rows)}

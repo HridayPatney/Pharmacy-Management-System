@@ -21,3 +21,10 @@ class SearchResult(BaseModel):
         default=None,
         description="Current on-hand stock when filtered to inventory",
     )
+
+
+class ReindexResponse(BaseModel):
+    """Result of ``POST /search/reindex``."""
+
+    scheduled: int
+    message: str = "Embedding rebuild queued for all medicines in inventory."

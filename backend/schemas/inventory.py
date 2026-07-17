@@ -34,6 +34,7 @@ class SellRequest(BaseModel):
     patient: str | None = None
     doctor: str | None = None
     clinic: str | None = None
+    prescription_file_key: str | None = None
 
 
 class InvoiceItem(BaseModel):

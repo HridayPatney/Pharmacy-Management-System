@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { extractOcr, listMedicines, searchSimilar, sellMedicines } from '../api/pharmacy'
+import { extractOcr, listMedicines, openPrescription, searchSimilar, sellMedicines } from '../api/pharmacy'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
@@ -22,6 +22,7 @@ export function OcrInvoicePage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [fileKey, setFileKey] = useState<string | null>(null)
 
   const stockByName = useMemo(() => {
     const map = new Map<string, Medicine>()
@@ -45,6 +46,7 @@ export function OcrInvoicePage() {
       setPatient(result["Patient's Name"] || '')
       setDoctor(result["Doctor's Name"] || '')
       setClinic(result["Clinic Name"] || '')
+      setFileKey(result.file_key || null)
       const meds = result["Medicines Prescribed"] || []
       setLines(meds.length ? meds.map((name) => ({ name, quantity: 1 })) : [{ name: '', quantity: 1 }])
       await refreshInventory()
@@ -53,7 +55,11 @@ export function OcrInvoicePage() {
       } else if (!meds.length) {
         setStatus('OCR finished but no medicines were found — add lines manually.')
       } else {
-        setStatus('OCR complete — review medicines below.')
+        setStatus(
+          result.file_key
+            ? 'OCR complete — prescription saved; review medicines below.'
+            : 'OCR complete — review medicines below.',
+        )
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -103,11 +109,16 @@ export function OcrInvoicePage() {
     setBusy(true)
     setError(null)
     try {
-      const res = await sellMedicines(token, medicines, { patient, doctor, clinic })
+      const res = await sellMedicines(token, medicines, {
+        patient,
+        doctor,
+        clinic,
+        prescription_file_key: fileKey || undefined,
+      })
       setInvoice(res.invoice)
       setStatus(
         res.invoice.sale_id
-          ? `Sale #${res.invoice.sale_id} recorded.`
+          ? `Sale #${res.invoice.sale_id} recorded${fileKey ? ' with linked prescription' : ''}.`
           : 'Sale recorded.',
       )
       await refreshInventory()
@@ -139,6 +150,20 @@ export function OcrInvoicePage() {
             disabled={busy}
           />
         </label>
+        {fileKey && token ? (
+          <button
+            type="button"
+            className="ghost"
+            disabled={busy}
+            onClick={() =>
+              void openPrescription(token, fileKey).catch((err) =>
+                setError(err instanceof ApiError ? err.message : 'Could not open prescription'),
+              )
+            }
+          >
+            View saved prescription
+          </button>
+        ) : null}
 
         <div className="row">
           <label style={{ flex: 1 }}>

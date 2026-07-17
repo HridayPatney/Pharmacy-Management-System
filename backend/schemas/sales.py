@@ -34,6 +34,7 @@ class SaleOut(BaseModel):
     status: str = "completed"
     cancelled_at: datetime | None = None
     cancelled_by_user_id: int | None = None
+    prescription_file_key: str | None = None
     created_at: datetime
     items: list[SaleItemOut] = Field(default_factory=list)
 

@@ -8,12 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.core.deps import require_roles
-from backend.core.roles import STAFF_ROLES
+from backend.core.roles import INVENTORY_WRITE_ROLES, STAFF_ROLES
 from backend.db import models
 from backend.db.database import get_db
-from backend.schemas.search import SearchRequest, SearchResult
+from backend.schemas.search import ReindexResponse, SearchRequest, SearchResult
 from backend.services.drug_api import fetch_drug_summary
 from backend.services.vector_search import search_similar_medicines
+from backend.services.vector_sync import reindex_all_medicines
 
 router = APIRouter()
 
@@ -71,6 +72,20 @@ def _inventory_name_fallback(
             )
         )
     return out
+
+
+@router.post("/reindex", response_model=ReindexResponse)
+def reindex_embeddings(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
+):
+    """Rebuild Chroma embeddings from every medicine currently in SQL inventory.
+
+    Use when ``chroma_store`` was wiped or search results are empty after a
+    disk reset. Jobs run in the background (inline under ``VECTOR_SYNC_INLINE``).
+    """
+    result = reindex_all_medicines(db)
+    return ReindexResponse(scheduled=result["scheduled"])
 
 
 @router.post("/similar", response_model=list[SearchResult])

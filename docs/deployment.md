@@ -60,6 +60,11 @@ CHROMA_PATH=/data/chroma_store
 
 `POST /ocr/extract` stores the image then returns OCR fields plus `file_key`.
 
+Staff can later open the image with `GET /ocr/prescription?key=<file_key>`
+(Bearer auth). When billing from OCR, the sell request may include
+`prescription_file_key` so the sale row links back to the stored Rx; Billing
+history shows an **Rx** button when that key is present.
+
 ## 3. First deploy checklist
 
 1. Deploy Postgres + Web Service.

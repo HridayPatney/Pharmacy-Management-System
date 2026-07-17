@@ -28,6 +28,8 @@ def _add_missing_columns() -> None:
         alters.append("ALTER TABLE sales ADD COLUMN cancelled_at DATETIME")
     if "cancelled_by_user_id" not in existing:
         alters.append("ALTER TABLE sales ADD COLUMN cancelled_by_user_id INTEGER")
+    if "prescription_file_key" not in existing:
+        alters.append("ALTER TABLE sales ADD COLUMN prescription_file_key VARCHAR(512)")
     if not alters:
         return
     with engine.begin() as conn:

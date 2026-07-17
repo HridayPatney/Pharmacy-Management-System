@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { listMedicines, listSales, searchSimilar, sellMedicines, voidSale } from '../api/pharmacy'
+import { listMedicines, listSales, openPrescription, searchSimilar, sellMedicines, voidSale } from '../api/pharmacy'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
@@ -334,6 +334,25 @@ export function BillingPage() {
                     <td>{sale.total.toFixed(2)}</td>
                     <td>{sale.items.length}</td>
                     <td className="row">
+                      {sale.prescription_file_key ? (
+                        <button
+                          type="button"
+                          className="ghost"
+                          disabled={busy}
+                          onClick={() =>
+                            void openPrescription(token!, sale.prescription_file_key!).catch(
+                              (err) =>
+                                setError(
+                                  err instanceof ApiError
+                                    ? err.message
+                                    : 'Could not open prescription',
+                                ),
+                            )
+                          }
+                        >
+                          Rx
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="ghost"

@@ -69,6 +69,7 @@ export interface Sale {
   status: 'completed' | 'cancelled' | string
   cancelled_at?: string | null
   cancelled_by_user_id?: number | null
+  prescription_file_key?: string | null
   created_at: string
   items: SaleItem[]
 }

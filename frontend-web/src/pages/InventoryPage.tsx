@@ -3,6 +3,7 @@ import {
   addMedicine,
   deleteMedicine,
   listMedicines,
+  reindexEmbeddings,
   updateMedicine,
 } from '../api/pharmacy'
 import { ApiError } from '../api/client'
@@ -33,6 +34,7 @@ export function InventoryPage() {
   const [form, setForm] = useState<Medicine>(emptyForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!token) return
@@ -94,6 +96,28 @@ export function InventoryPage() {
     }
   }
 
+  async function onReindex() {
+    if (!token || !writable) return
+    if (
+      !confirm(
+        'Rebuild similar-medicine embeddings for all inventory items? Use this if chroma_store was wiped.',
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await reindexEmbeddings(token)
+      setNotice(`Queued embedding rebuild for ${res.scheduled} medicine(s).`)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Reindex failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
   return (
@@ -104,6 +128,7 @@ export function InventoryPage() {
           <p className="muted">Search, filter low stock / expiry, and manage catalog items.</p>
         </div>
         {error ? <div className="error-box">{error}</div> : null}
+        {notice ? <p className="muted">{notice}</p> : null}
         <div className="row">
           <label style={{ flex: 1, minWidth: 180 }}>
             Search
@@ -142,6 +167,13 @@ export function InventoryPage() {
             </select>
           </label>
         </div>
+        {writable ? (
+          <div className="row">
+            <button type="button" className="ghost" disabled={busy} onClick={() => void onReindex()}>
+              Rebuild search embeddings
+            </button>
+          </div>
+        ) : null}
         <div className="table-wrap">
           <table>
             <thead>
