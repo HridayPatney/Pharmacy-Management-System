@@ -15,17 +15,13 @@ export function AppLayout() {
   if (!user) return <Navigate to="/login" replace />
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div>
-          <div className="brand">
-            Pharma<span>Assist</span>
-          </div>
-          <div className="user-chip">
-            {user.email} · {user.role}
-          </div>
+    <div className="dash-layout">
+      <aside className="sidebar" aria-label="Primary navigation">
+        <div className="sidebar-brand">
+          Pharma<span>Assist</span>
         </div>
-        <nav className="nav">
+
+        <nav className="sidebar-nav">
           <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
             Dashboard
           </NavLink>
@@ -49,12 +45,36 @@ export function AppLayout() {
           <NavLink to="/account" className={({ isActive }) => (isActive ? 'active' : '')}>
             Account
           </NavLink>
-          <button type="button" className="linkish" onClick={logout}>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <div className="avatar" aria-hidden="true">
+              {user.email.slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <div className="sidebar-user-email">{user.email}</div>
+              <div className="sidebar-user-role">{user.role}</div>
+            </div>
+          </div>
+
+          <button type="button" className="sidebar-logout" onClick={logout}>
             Log out
           </button>
-        </nav>
-      </header>
-      <Outlet />
+        </div>
+      </aside>
+
+      <div className="dash-main">
+        <header className="main-topbar">
+          <div className="pill">
+            {user.role} · <span className="pill-muted">staff</span>
+          </div>
+        </header>
+
+        <main className="dash-content">
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

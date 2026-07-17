@@ -32,10 +32,9 @@ body {
   font-family: var(--font-body);
   color: var(--ink);
   background:
-    radial-gradient(1200px 600px at 10% -10%, #2a6b5c 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #1a4a5c 0%, transparent 50%),
-    linear-gradient(160deg, var(--bg0), var(--bg1) 45%, var(--bg2));
-  background-attachment: fixed;
+    radial-gradient(900px 520px at 10% -10%, rgba(15,122,101,0.16) 0%, transparent 55%),
+    radial-gradient(700px 420px at 100% 0%, rgba(13,66,122,0.10) 0%, transparent 50%),
+    linear-gradient(180deg, #f7fbfb, #f3f7f6);
 }
 
 a {
@@ -56,6 +55,156 @@ textarea {
   padding: 1.25rem 1.25rem 3rem;
 }
 
+.dash-layout {
+  display: grid;
+  grid-template-columns: 270px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #081a15;
+  color: #e8f4f0;
+  padding: 1.1rem 1rem 1rem;
+  border-right: 1px solid rgba(232, 244, 240, 0.10);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.sidebar-brand {
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.1rem;
+}
+
+.sidebar-brand span {
+  color: #8fd6c2;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sidebar-nav a {
+  padding: 0.62rem 0.85rem;
+  border-radius: 12px;
+  font-weight: 700;
+  color: rgba(232, 244, 240, 0.86);
+  border: 1px solid transparent;
+}
+
+.sidebar-nav a:hover {
+  background: rgba(232, 244, 240, 0.06);
+  border-color: rgba(232, 244, 240, 0.12);
+}
+
+.sidebar-nav a.active {
+  background: rgba(15, 122, 101, 0.22);
+  border-color: rgba(143, 214, 194, 0.55);
+  color: #e8f4f0;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid rgba(232, 244, 240, 0.14);
+  background: rgba(232, 244, 240, 0.04);
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(143, 214, 194, 0.18);
+  border: 1px solid rgba(143, 214, 194, 0.35);
+  font-weight: 800;
+  color: #e8f4f0;
+}
+
+.sidebar-user-email {
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.sidebar-user-role {
+  font-size: 0.78rem;
+  color: rgba(232, 244, 240, 0.72);
+  margin-top: 0.15rem;
+}
+
+.sidebar-logout {
+  width: 100%;
+  padding: 0.62rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 244, 240, 0.14);
+  background: rgba(232, 244, 240, 0.04);
+  color: #e8f4f0;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sidebar-logout:hover {
+  background: rgba(232, 244, 240, 0.08);
+}
+
+.dash-main {
+  background: #f7fbfb;
+}
+
+.main-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: rgba(247, 251, 251, 0.88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(15, 28, 26, 0.06);
+}
+
+.pill {
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(15, 122, 101, 0.10);
+  border: 1px solid rgba(15, 122, 101, 0.18);
+  font-weight: 800;
+  color: #0b3a31;
+  white-space: nowrap;
+}
+
+.pill-muted {
+  font-weight: 800;
+  color: rgba(11, 58, 49, 0.65);
+}
+
+.dash-content {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 3rem;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -63,10 +212,11 @@ textarea {
 }
 
 .metric {
-  background: rgba(15, 122, 101, 0.08);
-  border: 1px solid var(--line);
+  background: #ffffff;
+  border: 1px solid rgba(15, 28, 26, 0.08);
   border-radius: 12px;
   padding: 0.9rem 1rem;
+  box-shadow: 0 12px 30px rgba(15, 28, 26, 0.04);
 }
 
 .metric-label {
@@ -150,11 +300,11 @@ textarea {
 }
 
 .panel {
-  background: var(--surface);
+  background: #fff;
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: 0 14px 40px rgba(15, 28, 26, 0.06);
   padding: 1.25rem 1.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(15, 28, 26, 0.08);
 }
 
 .panel h1,
@@ -436,8 +586,18 @@ a.button-link.primary:hover {
 }
 
 @media (max-width: 720px) {
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
+  .dash-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    min-height: auto;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .dash-content {
+    padding: 1rem 0.9rem 2rem;
   }
 }
