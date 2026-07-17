@@ -34,6 +34,45 @@ def _is_same_medicine(query: str, candidate: str) -> bool:
     return SequenceMatcher(None, q, c).ratio() >= 0.85
 
 
+def _query_text_for_search(medicine_name: str) -> str:
+    """Prefer drug-summary text for embeddings; fall back to the typed name."""
+    name = medicine_name.strip()
+    if not name:
+        return ""
+    summary = fetch_drug_summary(name)
+    if summary and summary != "No data found.":
+        return summary
+    return name
+
+
+def _inventory_name_fallback(
+    db: Session, query: str, top_k: int, exclude_query: str
+) -> list[SearchResult]:
+    """When vector search has no hits, suggest other in-stock names by fuzzy match."""
+    q_norm = _normalize(query)
+    if not q_norm:
+        return []
+    rows = db.query(models.Medicine).filter(models.Medicine.quantity > 0).all()
+    scored: list[tuple[float, models.Medicine]] = []
+    for med in rows:
+        if _is_same_medicine(exclude_query, med.name):
+            continue
+        ratio = SequenceMatcher(None, q_norm, _normalize(med.name)).ratio()
+        if ratio >= 0.45:
+            scored.append((ratio, med))
+    scored.sort(key=lambda t: (-t[0], t[1].name.lower()))
+    out: list[SearchResult] = []
+    for ratio, med in scored[:top_k]:
+        out.append(
+            SearchResult(
+                name=med.name,
+                score=1.0 - ratio,
+                quantity=med.quantity,
+            )
+        )
+    return out
+
+
 @router.post("/similar", response_model=list[SearchResult])
 def find_similar(
     request: SearchRequest,
@@ -45,13 +84,13 @@ def find_similar(
     Results are intersected with current inventory (quantity > 0) and never
     include the queried medicine itself.
     """
-    summary = fetch_drug_summary(request.medicine_name)
-    if not summary or summary == "No data found.":
-        raise HTTPException(status_code=404, detail="Summary not found for the requested medicine")
+    query_text = _query_text_for_search(request.medicine_name)
+    if not query_text:
+        raise HTTPException(status_code=400, detail="medicine_name is required")
 
     # Over-fetch so we still have enough after inventory / self filters.
     fetch_k = min(50, max(request.top_k * 5, 20))
-    raw = search_similar_medicines(query_text=summary, top_k=fetch_k)
+    raw = search_similar_medicines(query_text=query_text, top_k=fetch_k)
 
     in_stock = {
         m.name: m
@@ -83,5 +122,10 @@ def find_similar(
         )
         if len(results) >= request.top_k:
             break
+
+    if not results:
+        results = _inventory_name_fallback(
+            db, request.medicine_name, request.top_k, request.medicine_name
+        )
 
     return results
