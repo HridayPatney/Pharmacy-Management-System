@@ -6,7 +6,7 @@ Importing `backend.main` or hitting `GET /` does **not** load Chroma.
 
 Chroma initializes on the **first** call that needs embeddings:
 
-- `POST /inventory/add` / `update` / `delete` (via `vector_sync`)
+- `POST /inventory/add` / `update` / `delete` (via `vector_sync`, **background** after DB commit)
 - `POST /search/similar`
 - Scripts such as `scripts/view_vector_db.py` or `scripts/experiments/load_medicines_to_vector_db.py`
 

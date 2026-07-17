@@ -19,8 +19,10 @@ from backend.schemas.inventory import (
     SellResponse,
 )
 from backend.services.audit import write_audit
-from backend.services.drug_api import fetch_drug_summary
-from backend.services.vector_sync import remove_medicine_embedding, sync_medicine_embedding
+from backend.services.vector_sync import (
+    schedule_medicine_embedding_fetch,
+    schedule_remove_medicine_embedding,
+)
 
 router = APIRouter()
 
@@ -39,7 +41,7 @@ def add_medicine(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
 ):
-    """Create a medicine in the DB and embed its drug summary in Chroma."""
+    """Create a medicine in the DB; vector indexing runs in the background."""
     if db.query(models.Medicine).filter(models.Medicine.id == med.id).first():
         raise HTTPException(status_code=400, detail="Medicine with this ID already exists")
     new_med = models.Medicine(**med.model_dump())
@@ -47,8 +49,8 @@ def add_medicine(
     db.commit()
     db.refresh(new_med)
 
-    summary = fetch_drug_summary(new_med.name) or ""
-    sync_medicine_embedding(new_med.id, new_med.name, summary)
+    # Drug-summary fetch + Chroma upsert are slow — do not block the response.
+    schedule_medicine_embedding_fetch(new_med.id, new_med.name)
 
     return new_med
 
@@ -148,9 +150,9 @@ def delete_medicine(
     )
     db.commit()
 
-    remove_medicine_embedding(med_id)
+    schedule_remove_medicine_embedding(med_id)
 
-    return {"detail": f"Medicine {med_id} deleted from database and vector index"}
+    return {"detail": f"Medicine {med_id} deleted"}
 
 
 @router.put("/update/{med_id}", response_model=MedicineSchema)
@@ -160,7 +162,7 @@ def update_medicine(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
 ):
-    """Replace medicine fields and refresh the Chroma embedding."""
+    """Replace medicine fields; vector re-index runs in the background."""
     med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
     if not med:
         raise HTTPException(status_code=404, detail="Medicine not found")
@@ -170,8 +172,7 @@ def update_medicine(
     db.commit()
     db.refresh(med)
 
-    summary = fetch_drug_summary(med_update.name) or ""
-    sync_medicine_embedding(med_id, med_update.name, summary)
+    schedule_medicine_embedding_fetch(med_id, med_update.name)
 
     return med
 

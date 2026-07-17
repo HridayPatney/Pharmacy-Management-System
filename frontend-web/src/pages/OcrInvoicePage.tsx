@@ -19,7 +19,6 @@ export function OcrInvoicePage() {
   const [inventory, setInventory] = useState<Medicine[]>([])
   const [alts, setAlts] = useState<Record<string, SearchResult[]>>({})
   const [invoice, setInvoice] = useState<Invoice | null>(null)
-  const [fileKey, setFileKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -46,7 +45,6 @@ export function OcrInvoicePage() {
       setPatient(result["Patient's Name"] || '')
       setDoctor(result["Doctor's Name"] || '')
       setClinic(result["Clinic Name"] || '')
-      setFileKey(result.file_key || null)
       const meds = result["Medicines Prescribed"] || []
       setLines(meds.length ? meds.map((name) => ({ name, quantity: 1 })) : [{ name: '', quantity: 1 }])
       await refreshInventory()
@@ -59,15 +57,9 @@ export function OcrInvoicePage() {
       }
     } catch (err) {
       if (err instanceof ApiError) {
-        const hint =
-          err.code === 'STORAGE_UNAVAILABLE'
-            ? ' Storage (S3/local) failed.'
-            : err.code === 'OCR_CONFIG' || err.code.startsWith('OCR_PROVIDER')
-              ? ' Check GEMINI_API_KEY / Gemini access.'
-              : ''
-        setError(`${err.message}${hint}`)
+        setError(err.message)
       } else {
-        setError('OCR failed — try another image or check API configuration.')
+        setError('Could not read that prescription — try another image.')
       }
     } finally {
       setBusy(false)
@@ -137,7 +129,6 @@ export function OcrInvoicePage() {
         </div>
         {error ? <div className="error-box">{error}</div> : null}
         {status ? <p className="muted">{status}</p> : null}
-        {fileKey ? <p className="muted">Stored file key: {fileKey}</p> : null}
 
         <label>
           Prescription image

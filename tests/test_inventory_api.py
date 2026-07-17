@@ -122,16 +122,17 @@ def test_low_stock(client, sample_medicine_payload, pharmacist_headers):
     assert len(low.json()) == 1
 
 
-def test_add_returns_503_when_chroma_sync_fails_but_row_persists(
+def test_add_succeeds_when_chroma_sync_fails_but_row_persists(
     client, sample_medicine_payload, vector_mocks, pharmacist_headers
 ):
+    """Inventory save must not fail if background/index sync errors."""
     vector_mocks.add_medicine_to_vector_db.side_effect = RuntimeError("chroma down")
 
     response = client.post(
         "/inventory/add", json=sample_medicine_payload, headers=pharmacist_headers
     )
-    assert response.status_code == 503
-    assert "vector index" in response.json()["error"]["message"].lower()
+    assert response.status_code == 200
+    assert response.json()["id"] == "med-1"
 
     rows = client.get("/inventory/all", headers=pharmacist_headers).json()
     assert len(rows) == 1
