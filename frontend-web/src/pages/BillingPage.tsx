@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { listMedicines, listSales, sellMedicines, voidSale } from '../api/pharmacy'
+import { listMedicines, listSales, searchSimilar, sellMedicines, voidSale } from '../api/pharmacy'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
 import { downloadInvoicePdf } from '../lib/invoicePdf'
-import type { Invoice, Medicine, Sale } from '../types/api'
+import type { Invoice, Medicine, Sale, SearchResult } from '../types/api'
 
 interface LineItem {
   name: string
@@ -18,6 +18,7 @@ export function BillingPage() {
   const [clinic, setClinic] = useState('')
   const [lines, setLines] = useState<LineItem[]>([{ name: '', quantity: 1 }])
   const [inventory, setInventory] = useState<Medicine[]>([])
+  const [alts, setAlts] = useState<Record<string, SearchResult[]>>({})
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [history, setHistory] = useState<Sale[]>([])
   const [historyTotal, setHistoryTotal] = useState(0)
@@ -31,10 +32,11 @@ export function BillingPage() {
     return map
   }, [inventory])
 
-  async function refreshInventory() {
-    if (!token) return
+  async function refreshInventory(): Promise<Medicine[]> {
+    if (!token) return []
     const data = await listMedicines(token, { page: 1, limit: 100, sort: 'name' })
     setInventory(data.items)
+    return data.items
   }
 
   async function refreshHistory() {
@@ -46,10 +48,44 @@ export function BillingPage() {
 
   useEffect(() => {
     if (!token) return
+    void refreshInventory().catch(() => {
+      /* ignore on first load */
+    })
     void refreshHistory().catch((err) => {
       setError(err instanceof ApiError ? err.message : 'Failed to load sales history')
     })
   }, [token])
+
+  async function checkAlternatives() {
+    if (!token) return
+    setBusy(true)
+    setError(null)
+    try {
+      const items = await refreshInventory()
+      const map = new Map<string, Medicine>()
+      for (const m of items) map.set(m.name.toLowerCase(), m)
+
+      const nextAlts: Record<string, SearchResult[]> = {}
+      for (const line of lines) {
+        const name = line.name.trim()
+        if (!name) continue
+        const stock = map.get(name.toLowerCase())
+        if (!stock || stock.quantity < line.quantity) {
+          nextAlts[name] = await searchSimilar(token, name, 8)
+        }
+      }
+      setAlts(nextAlts)
+      setStatus(
+        Object.keys(nextAlts).length
+          ? 'Checked stock — see alternatives below for missing or low items.'
+          : 'All lines are in stock.',
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not check alternatives')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function onSell(e: FormEvent) {
     e.preventDefault()
@@ -74,6 +110,7 @@ export function BillingPage() {
           : 'Sale recorded — download PDF below.',
       )
       setLines([{ name: '', quantity: 1 }])
+      setAlts({})
       await refreshInventory()
       await refreshHistory()
     } catch (err) {
@@ -107,8 +144,8 @@ export function BillingPage() {
         <div>
           <h1>Billing</h1>
           <p className="muted">
-            Counter sales persist to the database. Download PDFs any time; history below is from
-            the server (not just this browser session).
+            Ring up counter sales, suggest in-stock alternatives when an item is missing, and
+            download invoices from sales history.
           </p>
         </div>
         {error ? <div className="error-box">{error}</div> : null}
@@ -170,7 +207,7 @@ export function BillingPage() {
                         stock {stock.quantity} · {stock.price.toFixed(2)}
                       </span>
                     ) : (
-                      <span className="badge warn">check name</span>
+                      <span className="badge warn">not in inventory</span>
                     )
                   ) : null}
                 </div>
@@ -197,11 +234,55 @@ export function BillingPage() {
             >
               Add line
             </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy}
+              onClick={() => void checkAlternatives()}
+            >
+              Find alternatives
+            </button>
             <button type="submit" className="primary" disabled={busy}>
               Charge & invoice
             </button>
           </div>
         </form>
+
+        {Object.keys(alts).length > 0 ? (
+          <div className="stack">
+            <h2>Alternatives</h2>
+            {Object.entries(alts).map(([name, results]) => (
+              <div key={name}>
+                <strong>{name}</strong>
+                {results.length === 0 ? (
+                  <p className="muted">No other in-stock alternatives found.</p>
+                ) : (
+                  <ul>
+                    {results.map((r) => (
+                      <li key={r.name}>
+                        {r.name}
+                        {r.quantity != null ? ` · stock ${r.quantity}` : ''}{' '}
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            setLines((prev) =>
+                              prev.map((l) =>
+                                l.name.trim() === name ? { ...l, name: r.name } : l,
+                              ),
+                            )
+                          }
+                        >
+                          Use
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {invoice ? (

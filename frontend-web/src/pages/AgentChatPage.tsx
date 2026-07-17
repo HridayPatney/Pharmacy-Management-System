@@ -73,7 +73,7 @@ export function AgentChatPage() {
         <div>
           <h1>Inventory chat</h1>
           <p className="muted">
-            Natural-language questions over live inventory and sales (read-only tools — not freeform SQL).
+            Ask about stock levels, expiry dates, and sales totals in plain language.
           </p>
         </div>
 
@@ -98,17 +98,6 @@ export function AgentChatPage() {
             <div key={t.id} className={t.role === 'user' ? 'chat-bubble user' : 'chat-bubble bot'}>
               <div className="chat-role">{t.role === 'user' ? 'You' : 'Agent'}</div>
               <pre className="chat-text">{t.text}</pre>
-              {t.meta?.tool ? (
-                <div className="muted chat-meta">
-                  mode: {t.meta.mode || 'tool'} · tool: {t.meta.tool}
-                  {t.meta.row_count ? ` · ${t.meta.row_count} row(s)` : ''}
-                </div>
-              ) : null}
-              {t.meta?.sql ? (
-                <pre className="chat-sql" title="Generated SQL (read-only, validated)">
-                  {t.meta.sql}
-                </pre>
-              ) : null}
               {t.meta && t.meta.rows.length > 0 && t.meta.tool !== 'help' ? (
                 <div className="table-wrap chat-table">
                   <table>

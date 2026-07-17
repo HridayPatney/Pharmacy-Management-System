@@ -38,7 +38,7 @@ export function AccountPage() {
       <section className="panel stack">
         <div>
           <h1>Account</h1>
-          <p className="muted">Signed-in staff profile for this pharmacy session.</p>
+          <p className="muted">Your signed-in profile for this pharmacy.</p>
         </div>
         {error ? <div className="error-box">{error}</div> : null}
         {busy && !profile ? <p className="muted">Loading…</p> : null}

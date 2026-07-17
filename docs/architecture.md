@@ -27,27 +27,27 @@ Chroma/sentence-transformers load **lazily** on first vector operation — see
 | SQLite (`pharma.db`) | Source of truth for inventory quantity, price, expiry | `DATABASE_URL` or project-root default |
 | Chroma (`chroma_store/`) | Embeddings for similar-medicine search | `CHROMA_PATH`, `CHROMA_COLLECTION`, `EMBEDDING_MODEL` |
 
-## Dual-write: SQLite ↔ Chroma
+## Dual-write: SQL inventory ↔ Chroma
 
-On **add**, **update**, and **delete**, inventory routes update SQLite and then sync Chroma:
+On **add**, **update**, and **delete**, inventory routes update SQL first, then sync Chroma:
 
-1. Commit the SQLAlchemy change (SQLite is the source of truth).
-2. Fetch a drug summary via `drug_api` when indexing (add/update).
+1. Commit the SQLAlchemy change (inventory DB is the source of truth).
+2. **Queue** drug-summary fetch + Chroma upsert/delete on a background worker so the API responds immediately.
 3. Sync Chroma through `backend.services.vector_sync` (upsert or delete by medicine `id`).
 
-**Sell** only changes SQLite quantities inside a **single transaction** (validate all lines, then apply, then one `commit`). Embeddings are untouched because they store name/description, not stock. If any line fails validation, the whole sell is rolled back.
+**Sell** only changes SQL quantities inside a **single transaction** (validate all lines, then apply, then one `commit`). Embeddings are untouched because they store name/description, not stock. If any line fails validation, the whole sell is rolled back.
 
 ### Sync failure policy
 
-SQLite and Chroma are **not** one ACID transaction across processes.
+SQL and Chroma are **not** one ACID transaction across processes.
 
 | Outcome | Behavior |
 |---------|----------|
-| SQLite commit fails | Request fails; nothing to sync |
-| SQLite OK, Chroma fails | Inventory change is kept; API returns **HTTP 503** with a message to retry indexing (e.g. call update again) |
+| SQL commit fails | Request fails; nothing to sync |
+| SQL OK, Chroma fails later | Inventory change is kept; failure is **logged**; HTTP still **200** (indexing is best-effort / background) |
 | Both OK | Normal 200 response |
 
-Do **not** roll back SQLite when Chroma fails: stock accuracy beats search freshness. To repair search, re-run update (or delete/re-add) for the affected medicine.
+Do **not** roll back SQL when Chroma fails: stock accuracy beats search freshness. To repair search, re-run update (or delete/re-add) for the affected medicine. Set `VECTOR_SYNC_INLINE=1` in tests to run indexing on the request thread.
 
 ## API contracts (do not break without a UI migration)
 

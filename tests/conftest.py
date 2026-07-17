@@ -89,6 +89,8 @@ def client(tmp_path, monkeypatch, vector_mocks):
     upload_dir = tmp_path / "uploads"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
     monkeypatch.setenv("JWT_SECRET", "test-jwt-secret-not-for-production")
+    # Run vector sync on the request thread so tests can assert mock calls reliably.
+    monkeypatch.setenv("VECTOR_SYNC_INLINE", "1")
     # Never inherit production S3 settings from a developer ``.env``.
     monkeypatch.setenv("STORAGE_BACKEND", "local")
     monkeypatch.setenv("UPLOAD_DIR", str(upload_dir))
