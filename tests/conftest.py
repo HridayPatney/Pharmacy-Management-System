@@ -107,6 +107,10 @@ def client(tmp_path, monkeypatch, vector_mocks):
 
     config.get_database_url.cache_clear()
     config.get_jwt_secret.cache_clear()
+    # ``load_dotenv`` (on first config import) may have re-applied developer ``.env``;
+    # clear bootstrap after imports so TestClient lifespan does not seed a second admin.
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_EMAIL", "")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "")
     database.DATABASE_URL = config.get_database_url()
     database.engine = database.create_engine(
         database.DATABASE_URL,
