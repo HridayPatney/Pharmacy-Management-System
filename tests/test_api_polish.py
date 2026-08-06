@@ -18,7 +18,7 @@ def test_health_ready_db_ok(client):
     body = response.json()
     assert body["status"] in ("ok", "degraded")
     assert body["checks"]["db"]["status"] == "ok"
-    assert "chroma" in body["checks"]
+    assert "pgvector" in body["checks"]
 
 
 def test_error_envelope_on_unauthorized(client):

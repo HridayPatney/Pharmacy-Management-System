@@ -1,6 +1,6 @@
-"""Inspect Chroma contents for the configured vector store.
+"""Inspect pgvector medicine embeddings.
 
-Loads the ML stack on first use (lazy). Run from the repository root::
+Requires DATABASE_URL → PostgreSQL. Run from the repository root::
 
     python scripts/view_vector_db.py
 """
@@ -14,34 +14,40 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.services.vector_search import get_collection
-
 
 def display_vector_contents() -> None:
-    """Print ids, names, and truncated documents from the medicine collection."""
-    print("Inspecting ChromaDB vector store...\n")
+    """Print medicine_id, name, and truncated summary from medicine_embeddings."""
+    from sqlalchemy import text
 
+    from backend.db.database import SessionLocal
+    from backend.services.vector_search import vectors_enabled
+
+    print("Inspecting pgvector medicine_embeddings...\n")
+    if not vectors_enabled():
+        print("Vector store requires PostgreSQL. Set DATABASE_URL and retry.")
+        return
+
+    db = SessionLocal()
     try:
-        collection = get_collection()
-        all_data = collection.get(include=["documents", "metadatas"])
-        ids = all_data["ids"]
-        docs = all_data["documents"]
-        metas = all_data["metadatas"]
-
-        if not ids:
-            print("No vectors found in the database.")
+        rows = db.execute(
+            text(
+                "SELECT medicine_id, name, LEFT(COALESCE(summary, ''), 120) AS snippet "
+                "FROM medicine_embeddings ORDER BY name"
+            )
+        ).all()
+        if not rows:
+            print("No vectors found. Add medicines or POST /search/reindex.")
             return
-
-        for i in range(len(ids)):
-            print(f"ID: {ids[i]}")
-            print(f"Name: {metas[i].get('name', 'N/A')}")
-            print(f"Description: {docs[i][:120]}...")
+        for medicine_id, name, snippet in rows:
+            print(f"ID: {medicine_id}")
+            print(f"Name: {name}")
+            print(f"Description: {snippet}...")
             print("-" * 60)
-
-        print(f"Total vectors: {len(ids)}")
-
+        print(f"Total vectors: {len(rows)}")
     except Exception as e:
         print(f"Error reading from vector DB: {e}")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # PharmaAssist — Pharmacy Management System
 
-FastAPI backend for inventory, similar-medicine search (Chroma), and prescription OCR (Gemini), with a Streamlit UI.
+FastAPI backend for inventory, similar-medicine search (Postgres/pgvector), and prescription OCR (Gemini), with a React frontend.
 
 ## Prerequisites
 
@@ -61,7 +61,7 @@ From the repository root:
 python scripts/init_db.py
 ```
 
-This creates `pharma.db` (SQLite). Chroma data is stored under `chroma_store/` when medicines are added.
+This creates `pharma.db` (SQLite) by default. Similar-search embeddings require PostgreSQL + pgvector (see `docker-compose.pgvector.yml` and [docs/vector-search.md](docs/vector-search.md)).
 
 ### 5. Run the API
 

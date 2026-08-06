@@ -1,40 +1,55 @@
-# Vector search (Chroma)
+# Vector search (Postgres / pgvector)
+
+Similar-medicine search stores embeddings in **PostgreSQL** via the
+[`pgvector`](https://github.com/pgvector/pgvector) extension — the same database
+as inventory (see [Render’s pgvector guidance](https://render.com/articles/simplify-ai-stack-managed-postgresql-pgvector)).
+
+## SQLite vs Postgres
+
+| Database | Behavior |
+|----------|----------|
+| **SQLite** (local default) | Vector upserts are **no-ops**; `/search/similar` returns `[]` then may use **fuzzy name fallback** |
+| **PostgreSQL** | Full pgvector upsert + cosine search |
+
+Day-to-day vector checks: run local Postgres with pgvector (see `docker-compose.pgvector.yml`) and set `DATABASE_URL`.
 
 ## When the ML stack loads
 
-Importing `backend.main` or hitting `GET /` does **not** load Chroma.
+Importing `backend.main` or hitting `GET /` does **not** load the embedding model.
 
-Chroma initializes on the **first** call that needs embeddings:
+The ONNX MiniLM embedder (Chroma’s `DefaultEmbeddingFunction`, no PersistentClient)
+loads on the **first** Postgres vector operation:
 
-- `POST /inventory/add` / `update` / `delete` (via `vector_sync`, **background** after DB commit)
+- `POST /inventory/add` / `update` / `delete` (via `vector_sync`, background after DB commit)
 - `POST /search/similar`
-- Scripts such as `scripts/view_vector_db.py` or `scripts/experiments/load_medicines_to_vector_db.py`
-
-Embeddings use Chroma's **default ONNX MiniLM** function (`onnxruntime`), not
-PyTorch / sentence-transformers — so a normal `pip install -r requirements-api.txt`
-is enough on Windows.
-
-OCR (`google.genai`, optional OpenCV for the local demo preprocess) also loads
-lazily inside `ocr_service` when `extract_json` / `clean_image` run.
+- `POST /search/reindex`
 
 ## Configuration
 
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `CHROMA_PATH` | `<repo>/chroma_store` | Persistence directory |
-| `CHROMA_COLLECTION` | `medicine_embeddings` | Collection name |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Reserved / documented; API uses Chroma default ONNX EF |
+| Variable | Notes |
+|----------|-------|
+| `DATABASE_URL` | Must be `postgresql…` for vector search |
+| `EMBEDDING_MODEL` | Documented as `all-MiniLM-L6-v2` (384-d); keep one model for the whole catalog |
 
-Changing `CHROMA_COLLECTION` without reindexing makes similarity results wrong or empty.
+`CHROMA_PATH` / `CHROMA_COLLECTION` are **unused** for persistence (no disk mount needed on Render).
 
 ## Reindex
 
-1. Stop the API process.
-2. Optionally delete or rename the old `CHROMA_PATH` directory (backup first).
-3. Set the new env vars in `.env`.
-4. Restart the API and re-add medicines (inventory **update** or **add**), or run
-   `python scripts/experiments/load_medicines_to_vector_db.py` for a sample seed.
-5. Confirm with `python scripts/view_vector_db.py`.
+After deploy or when embeddings are empty:
 
-Response shape for `POST /search/similar` remains `[{ "name", "score" }]` where
-`score` is Chroma distance (lower is closer).
+```bash
+# as pharmacist/admin
+POST /search/reindex
+```
+
+Or locally against Postgres:
+
+```bash
+python scripts/reindex_vectors.py
+```
+
+Confirm with `GET /health/ready` (`checks.pgvector.status == ok`) and
+`python scripts/view_vector_db.py`.
+
+`POST /search/similar` returns `[{ "name", "score", "quantity?" }]` where `score`
+is cosine distance (lower is closer).

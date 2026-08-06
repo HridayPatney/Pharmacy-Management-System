@@ -62,6 +62,7 @@ orjson==3.10.18
 overrides==7.7.0
 packaging==25.0
 pandas==2.3.0
+pgvector==0.4.1
 pillow==11.2.1
 plotly==6.1.2
 posthog==5.4.0

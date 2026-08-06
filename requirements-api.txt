@@ -9,11 +9,13 @@ python-dotenv==1.1.1
 python-multipart==0.0.20
 requests==2.32.4
 chromadb==1.0.13
+pgvector==0.4.1
 google-genai==1.22.0
 opencv-python==4.11.0.86
 numpy==2.3.1
-# Note: sentence-transformers/torch are optional. The API uses Chroma's default
-# ONNX embedding function to avoid heavy Windows installs.
+# Embeddings: Chroma DefaultEmbeddingFunction (ONNX MiniLM) for vectors stored in
+# Postgres/pgvector. Persistent Chroma is no longer used. sentence-transformers/torch
+# remain optional.
 pytest==8.4.1
 httpx==0.28.1
 ruff==0.15.21

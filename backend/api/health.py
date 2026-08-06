@@ -27,15 +27,10 @@ def _check_db() -> dict[str, Any]:
         return {"status": "fail", "detail": str(exc)}
 
 
-def _check_chroma() -> dict[str, Any]:
-    try:
-        from backend.services.vector_search import get_collection
+def _check_pgvector() -> dict[str, Any]:
+    from backend.services.vector_search import pgvector_status
 
-        collection = get_collection()
-        collection.count()
-        return {"status": "ok"}
-    except Exception as exc:
-        return {"status": "fail", "detail": str(exc)}
+    return pgvector_status()
 
 
 def _check_gemini() -> dict[str, Any]:
@@ -55,25 +50,27 @@ def live():
 
 @router.get("/ready")
 def ready():
-    """Readiness: database required; Chroma/Gemini degrade rather than always fail.
+    """Readiness: database required; pgvector/Gemini degrade rather than always fail.
 
     Returns HTTP 200 when overall status is ``ok`` or ``degraded``, 503 when ``fail``.
+    On SQLite, pgvector reports ``skipped`` (not degraded).
     """
     checks: dict[str, Any] = {
         "db": _check_db(),
-        "chroma": _check_chroma(),
+        "pgvector": _check_pgvector(),
     }
     if os.getenv("HEALTH_CHECK_GEMINI", "false").strip().lower() in ("1", "true", "yes"):
         checks["gemini"] = _check_gemini()
 
     db_ok = checks["db"]["status"] == "ok"
-    chroma_ok = checks["chroma"]["status"] == "ok"
+    vector_status = checks["pgvector"]["status"]
+    vector_bad = vector_status == "fail"
     gemini = checks.get("gemini")
     gemini_fail = gemini is not None and gemini["status"] != "ok"
 
     if not db_ok:
         overall = "fail"
-    elif not chroma_ok or gemini_fail:
+    elif vector_bad or gemini_fail:
         overall = "degraded"
     else:
         overall = "ok"
