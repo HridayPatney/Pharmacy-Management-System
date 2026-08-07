@@ -88,6 +88,7 @@ export interface SaleSummary {
 }
 
 export interface SearchResult {
+  medicine_id: string
   name: string
   score: number
   quantity?: number | null

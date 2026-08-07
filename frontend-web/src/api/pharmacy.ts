@@ -78,6 +78,10 @@ export function listMedicines(
   return apiJson<PaginatedMedicines>(`/inventory/?${query}`, { token })
 }
 
+export function listAllMedicines(token: string) {
+  return apiJson<Medicine[]>('/inventory/all', { token })
+}
+
 export function addMedicine(token: string, med: Medicine) {
   return apiJson<Medicine>('/inventory/add', {
     method: 'POST',
@@ -103,7 +107,7 @@ export function deleteMedicine(token: string, id: string) {
 
 export function sellMedicines(
   token: string,
-  medicines: { name: string; quantity: number }[],
+  medicines: { name: string; quantity: number; id?: string }[],
   meta: { patient?: string; doctor?: string; clinic?: string } = {},
 ) {
   return apiJson<SellResponse>('/inventory/sell', {

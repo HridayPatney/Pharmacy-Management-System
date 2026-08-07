@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { listMedicines, listSales, searchSimilar, sellMedicines, voidSale } from '../api/pharmacy'
+import { listAllMedicines, listMedicines, listSales, searchSimilar, sellMedicines, voidSale } from '../api/pharmacy'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
@@ -9,6 +9,11 @@ import type { Invoice, Medicine, Sale, SearchResult } from '../types/api'
 interface LineItem {
   name: string
   quantity: number
+  medicineId?: string
+}
+
+function lineKey(name: string): string {
+  return name.trim().toLowerCase()
 }
 
 export function BillingPage() {
@@ -97,18 +102,41 @@ export function BillingPage() {
   async function onSell(e: FormEvent) {
     e.preventDefault()
     if (!token) return
-    const medicines = lines
-      .map((l) => ({ name: l.name.trim(), quantity: l.quantity }))
-      .filter((l) => l.name && l.quantity > 0)
-    if (!medicines.length) {
-      setError('Add at least one medicine line.')
-      return
-    }
     setBusy(true)
     setError(null)
     setStatus(null)
     try {
-      await refreshInventory()
+      const items = await listAllMedicines(token)
+      const byId = new Map<string, Medicine>()
+      const byName = new Map<string, Medicine>()
+      for (const m of items) {
+        byId.set(m.id, m)
+        byName.set(m.name.toLowerCase(), m)
+      }
+      const medicines = lines
+        .map((l) => {
+          const trimmed = l.name.trim()
+          const stock =
+            (l.medicineId ? byId.get(l.medicineId) : undefined) ??
+            byName.get(trimmed.toLowerCase())
+          return {
+            id: stock?.id,
+            name: stock?.name ?? trimmed,
+            quantity: l.quantity,
+          }
+        })
+        .filter((l) => l.name && l.quantity > 0)
+      if (!medicines.length) {
+        setError('Add at least one medicine line.')
+        return
+      }
+      const missing = medicines.filter((m) => !m.id).map((m) => m.name)
+      if (missing.length) {
+        setError(
+          `Not in inventory: ${missing.join(', ')}. Pick a name from the suggestions list.`,
+        )
+        return
+      }
       const res = await sellMedicines(token, medicines, { patient, doctor, clinic })
       setInvoice(res.invoice)
       setStatus(
@@ -188,7 +216,7 @@ export function BillingPage() {
                     value={line.name}
                     onChange={(e) => {
                       const next = [...lines]
-                      next[idx] = { ...line, name: e.target.value }
+                      next[idx] = { ...line, name: e.target.value, medicineId: undefined }
                       setLines(next)
                     }}
                     onFocus={() => void refreshInventory()}
@@ -275,7 +303,9 @@ export function BillingPage() {
                           onClick={() =>
                             setLines((prev) =>
                               prev.map((l) =>
-                                l.name.trim() === name ? { ...l, name: r.name } : l,
+                                lineKey(l.name) === lineKey(name)
+                                  ? { ...l, name: r.name, medicineId: r.medicine_id }
+                                  : l,
                               ),
                             )
                           }

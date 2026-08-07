@@ -66,6 +66,7 @@ def _inventory_name_fallback(
     for ratio, med in scored[:top_k]:
         out.append(
             SearchResult(
+                medicine_id=med.id,
                 name=med.name,
                 score=1.0 - ratio,
                 quantity=med.quantity,
@@ -130,6 +131,7 @@ def find_similar(
         seen.add(key)
         results.append(
             SearchResult(
+                medicine_id=med.id,
                 name=med.name,
                 score=float(hit["score"]),
                 quantity=med.quantity,

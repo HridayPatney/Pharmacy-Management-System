@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import asc, desc, or_
+from sqlalchemy import asc, desc, func, or_
 from sqlalchemy.orm import Session
 
 from backend.core.deps import require_roles
@@ -203,24 +203,37 @@ def sell_medicines(
 
     try:
         for item in payload.medicines:
-            name = item.name.strip()
+            name = " ".join(item.name.strip().split())
             qty = item.quantity
+            med_id = (item.id or "").strip() or None
 
-            medicine = (
-                db.query(models.Medicine)
-                .filter(models.Medicine.name == name)
-                .first()
-            )
+            medicine = None
+            if med_id:
+                medicine = (
+                    db.query(models.Medicine)
+                    .filter(models.Medicine.id == med_id)
+                    .first()
+                )
+            if medicine is None and name:
+                medicine = (
+                    db.query(models.Medicine)
+                    .filter(func.lower(models.Medicine.name) == name.lower())
+                    .first()
+                )
 
             if not medicine:
-                raise HTTPException(status_code=404, detail=f"Medicine {name} not found.")
+                label = f"id={med_id}" if med_id and not name else name or med_id
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Medicine '{label}' not found in inventory.",
+                )
             if medicine.quantity < qty:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Insufficient stock for {name}.",
+                    detail=f"Insufficient stock for {medicine.name}.",
                 )
 
-            planned.append((medicine, qty, name))
+            planned.append((medicine, qty, medicine.name))
 
         for medicine, qty, name in planned:
             medicine.quantity -= qty
