@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from unittest.mock import MagicMock
 
 
 def test_similar_excludes_self_and_requires_stock(
@@ -91,3 +92,54 @@ def test_similar_falls_back_when_drug_summary_missing(
     body = res.json()
     assert body[0]["name"] == "Atorvastatin"
     assert body[0]["medicine_id"] == "ato-2"
+
+
+def test_similar_reuses_stored_embedding_for_low_stock(
+    client, pharmacist_headers, vector_mocks, monkeypatch
+):
+    """In-inventory (incl. low stock) should reuse stored emb — no drug-summary fetch."""
+    today = date.today()
+    base = {
+        "dosage": "10mg",
+        "price": 4.0,
+        "expiry_date": (today + timedelta(days=200)).isoformat(),
+    }
+    assert (
+        client.post(
+            "/inventory/add",
+            json={"id": "lip-low", "name": "Lipitor", "quantity": 1, **base},
+            headers=pharmacist_headers,
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/inventory/add",
+            json={"id": "ato-3", "name": "Atorvastatin", "quantity": 9, **base},
+            headers=pharmacist_headers,
+        ).status_code
+        == 200
+    )
+
+    summary = MagicMock(side_effect=AssertionError("should not fetch drug summary"))
+    monkeypatch.setattr("backend.api.search.fetch_drug_summary", summary)
+    monkeypatch.setattr("backend.api.search.vectors_enabled", lambda: True)
+    monkeypatch.setattr(
+        "backend.api.search._has_stored_embedding",
+        lambda _db, medicine_id: medicine_id == "lip-low",
+    )
+    vector_mocks.search_similar_medicines.return_value = [
+        {"name": "Atorvastatin", "score": 0.11},
+    ]
+
+    res = client.post(
+        "/search/similar",
+        json={"medicine_name": "lipitor", "top_k": 5},
+        headers=pharmacist_headers,
+    )
+    assert res.status_code == 200
+    assert res.json()[0]["name"] == "Atorvastatin"
+    summary.assert_not_called()
+    called_kwargs = vector_mocks.search_similar_medicines.call_args.kwargs
+    assert called_kwargs.get("query_medicine_id") == "lip-low"
+    assert called_kwargs.get("exclude_medicine_id") == "lip-low"

@@ -13,16 +13,17 @@ as inventory (see [Render’s pgvector guidance](https://render.com/articles/sim
 
 Day-to-day vector checks: run local Postgres with pgvector (see `docker-compose.pgvector.yml`) and set `DATABASE_URL`.
 
-## When the ML stack loads
+## Query path (`POST /search/similar`)
 
-Importing `backend.main` or hitting `GET /` does **not** load the embedding model.
+1. If the typed name matches an **inventory** row (any stock, including 0) **and**
+   that row has a stored embedding → **reuse** that vector (no drug-summary fetch,
+   no re-embed).
+2. Otherwise → fetch drug summary (or use the typed name) and **embed fresh**.
+3. Rank against stored inventory embeddings with `quantity > 0`, excluding the
+   queried medicine itself.
+4. If vector search yields nothing → fuzzy **name** fallback on in-stock rows.
 
-The ONNX MiniLM embedder (Chroma’s `DefaultEmbeddingFunction`, no PersistentClient)
-loads on the **first** Postgres vector operation:
-
-- `POST /inventory/add` / `update` / `delete` (via `vector_sync`, background after DB commit)
-- `POST /search/similar`
-- `POST /search/reindex`
+Stock changes do **not** recompute embeddings; quantity is only a filter.
 
 ## Configuration
 

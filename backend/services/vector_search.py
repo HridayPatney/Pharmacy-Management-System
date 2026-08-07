@@ -90,8 +90,19 @@ def delete_medicine_from_vector_db(medicine_id) -> None:
         db.close()
 
 
-def search_similar_medicines(query_text, top_k=5) -> list[dict[str, Any]]:
-    """Return up to ``top_k`` similar in-stock medicines for ``query_text``.
+def search_similar_medicines(
+    query_text: str | None = None,
+    top_k: int = 5,
+    *,
+    query_medicine_id: str | None = None,
+    exclude_medicine_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return up to ``top_k`` similar in-stock medicines.
+
+    Query vector resolution:
+    * If ``query_medicine_id`` has a row in ``medicine_embeddings``, reuse that
+      stored vector (typical for low/zero-stock inventory medicines).
+    * Otherwise embed ``query_text`` (typed / missing names).
 
     Each result is ``{"name": str, "score": float}`` where ``score`` is cosine
     distance (lower is closer). Empty list on SQLite or when no embeddings exist.
@@ -103,14 +114,23 @@ def search_similar_medicines(query_text, top_k=5) -> list[dict[str, Any]]:
     from backend.db.models import Medicine, MedicineEmbedding
     from backend.services.embeddings import embed_text
 
-    if not (query_text or "").strip():
-        return []
-
-    query_vec = embed_text(query_text)
-    distance = MedicineEmbedding.embedding.cosine_distance(query_vec)
-
     db = SessionLocal()
     try:
+        query_vec = None
+        excluded = exclude_medicine_id
+
+        if query_medicine_id:
+            row = db.get(MedicineEmbedding, query_medicine_id)
+            if row is not None and row.embedding is not None:
+                query_vec = row.embedding
+                excluded = excluded or query_medicine_id
+
+        if query_vec is None:
+            if not (query_text or "").strip():
+                return []
+            query_vec = embed_text(query_text)
+
+        distance = MedicineEmbedding.embedding.cosine_distance(query_vec)
         stmt = (
             select(Medicine.name, distance.label("score"))
             .join(Medicine, Medicine.id == MedicineEmbedding.medicine_id)
@@ -118,6 +138,8 @@ def search_similar_medicines(query_text, top_k=5) -> list[dict[str, Any]]:
             .order_by(distance)
             .limit(top_k)
         )
+        if excluded:
+            stmt = stmt.where(Medicine.id != excluded)
         rows = db.execute(stmt).all()
         return [{"name": name, "score": float(score)} for name, score in rows]
     finally:

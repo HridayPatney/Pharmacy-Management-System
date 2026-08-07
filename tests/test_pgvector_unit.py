@@ -122,6 +122,53 @@ def test_search_similar_maps_rows(fresh_vector_search, monkeypatch):
     fake_db.close.assert_called_once()
 
 
+def test_search_similar_reuses_stored_embedding(fresh_vector_search, monkeypatch):
+    vs = fresh_vector_search
+    stored = MagicMock()
+    stored.embedding = [0.1] * 384
+    fake_db = MagicMock()
+    fake_db.get.return_value = stored
+    fake_db.execute.return_value.all.return_value = [("Ibuprofen", 0.12)]
+    monkeypatch.setattr("backend.db.database.SessionLocal", MagicMock(return_value=fake_db))
+    embed = MagicMock(side_effect=AssertionError("should not re-embed"))
+    monkeypatch.setattr("backend.services.embeddings.embed_text", embed)
+
+    with patch.object(vs, "vectors_enabled", return_value=True):
+        hits = vs.search_similar_medicines(
+            query_medicine_id="asp-1",
+            top_k=5,
+            exclude_medicine_id="asp-1",
+        )
+
+    assert hits == [{"name": "Ibuprofen", "score": 0.12}]
+    assert fake_db.get.call_count == 1
+    assert fake_db.get.call_args.args[1] == "asp-1"
+    embed.assert_not_called()
+    fake_db.close.assert_called_once()
+
+
+def test_search_similar_falls_back_to_text_when_no_stored_row(
+    fresh_vector_search, monkeypatch
+):
+    vs = fresh_vector_search
+    fake_db = MagicMock()
+    fake_db.get.return_value = None
+    fake_db.execute.return_value.all.return_value = [("Ibuprofen", 0.3)]
+    monkeypatch.setattr("backend.db.database.SessionLocal", MagicMock(return_value=fake_db))
+    embed = MagicMock(return_value=[0.0] * 384)
+    monkeypatch.setattr("backend.services.embeddings.embed_text", embed)
+
+    with patch.object(vs, "vectors_enabled", return_value=True):
+        hits = vs.search_similar_medicines(
+            "Aspirin summary",
+            top_k=3,
+            query_medicine_id="missing-emb",
+        )
+
+    assert hits == [{"name": "Ibuprofen", "score": 0.3}]
+    embed.assert_called_once_with("Aspirin summary")
+
+
 def test_pgvector_status_ok(fresh_vector_search, monkeypatch):
     vs = fresh_vector_search
     fake_db = MagicMock()
