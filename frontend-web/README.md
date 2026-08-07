@@ -33,9 +33,12 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:8501
 - Dashboard with stock bar chart, SKU / low-stock / value metrics
 - Login (`POST /auth/login`) + Bearer token on all staff routes
 - Inventory list with pagination / search / low-stock filter; add/update/delete for pharmacist & admin
-- Billing: counter sell, session history, **invoice PDF download**
+- Billing: counter sell, alternatives (similar search), sales history, void, **invoice PDF**
 - OCR upload → availability / alternatives → sell + PDF invoice
-- Account: profile (`GET /auth/me`); admin sees recent audit log
+- Chat: inventory NL agent (`POST /agent/query`) with SQL transparency
+- Account: profile (`GET /auth/me`); Admin: staff + audit log
+
+See repo [docs/architecture.md](../docs/architecture.md) for end-to-end flows.
 
 ## Roles
 

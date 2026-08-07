@@ -3,14 +3,17 @@
 Target architecture for PharmaAssist:
 
 ```text
-Browser / React
-        │
+Browser / React (frontend-web)
+        │  HTTPS + Bearer JWT
         ▼
 Render Web Service  (FastAPI; embeddings via pgvector)
         │
         ├── Render Postgres  (DATABASE_URL + pgvector)
         └── AWS S3           (prescriptions when STORAGE_BACKEND=s3)
 ```
+
+For services, API prefixes, and end-to-end request flows (login, sell, similar-search,
+OCR, agent), see **[architecture.md](architecture.md)**.
 
 ## 1. Render Postgres
 
@@ -37,8 +40,8 @@ Render Web Service  (FastAPI; embeddings via pgvector)
 | `JWT_SECRET` | Long random secret |
 | `BOOTSTRAP_ADMIN_EMAIL` | First admin (only when users table empty) |
 | `BOOTSTRAP_ADMIN_PASSWORD` | First admin password |
-| `GEMINI_API_KEY` | OCR |
-| `CORS_ORIGINS` | Your frontend origin(s) |
+| `GEMINI_API_KEY` | OCR + inventory chat planning |
+| `CORS_ORIGINS` | Your React frontend origin(s) |
 
 Remove unused `CHROMA_PATH` / disk mounts if present from older deploys.
 
@@ -83,4 +86,4 @@ Remove unused `CHROMA_PATH` / disk mounts if present from older deploys.
 | Optional: `docker compose -f docker-compose.pgvector.yml up -d` + `DATABASE_URL` | pgvector embeddings in same DB |
 | `STORAGE_BACKEND=local` | `STORAGE_BACKEND=s3` + AWS keys |
 
-See also [auth.md](auth.md), [environment.md](environment.md), and [vector-search.md](vector-search.md).
+See also [architecture.md](architecture.md), [auth.md](auth.md), [environment.md](environment.md), and [vector-search.md](vector-search.md).

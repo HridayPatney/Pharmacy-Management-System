@@ -1,11 +1,17 @@
 # PharmaAssist — Pharmacy Management System
 
-FastAPI backend for inventory, similar-medicine search (Postgres/pgvector), and prescription OCR (Gemini), with a React frontend.
+FastAPI backend for inventory, sales, JWT auth, similar-medicine search
+(Postgres/pgvector), prescription OCR (Gemini), and a read-only inventory chat
+agent — with a **React** staff UI (`frontend-web`).
+
+**Architecture (services, APIs, flows):** [docs/architecture.md](docs/architecture.md)
 
 ## Prerequisites
 
 - Python 3.11+ recommended
-- A Gemini API key for OCR (optional if you only use inventory/search)
+- Node 20+ for the React UI
+- A Gemini API key for OCR / chat planning (optional if you only use inventory)
+- PostgreSQL + pgvector for semantic similar-search (SQLite is fine for CRUD locally)
 
 ## Quick start
 
@@ -24,25 +30,19 @@ Activate:
 
 ### 2. Install dependencies
 
-Full stack (API + Streamlit UI):
-
-```bash
-pip install -r requirements.txt
-```
-
-API only:
+API (recommended for backend work):
 
 ```bash
 pip install -r requirements-api.txt
 ```
 
-UI only (expects the API already running):
+Full install (API + legacy Streamlit):
 
 ```bash
-pip install -r requirements-ui.txt
+pip install -r requirements.txt
 ```
 
-Pinned full freeze (reproducible installs): `requirements-lock.txt`.
+Pinned freeze: `requirements-lock.txt`. See [docs/dependencies.md](docs/dependencies.md).
 
 ### 3. Configure environment
 
@@ -50,18 +50,24 @@ Pinned full freeze (reproducible installs): `requirements-lock.txt`.
 cp .env.example .env
 ```
 
-Set at least `JWT_SECRET`, bootstrap admin email/password, and (for OCR) `GEMINI_API_KEY`.
+Set at least `JWT_SECRET`, bootstrap admin email/password, and (for OCR/chat)
+`GEMINI_API_KEY`. Default CORS includes React (`5173`) and Streamlit (`8501`).
 See [docs/environment.md](docs/environment.md) and [docs/auth.md](docs/auth.md).
 
 ### 4. Initialize the database
-
-From the repository root:
 
 ```bash
 python scripts/init_db.py
 ```
 
-This creates `pharma.db` (SQLite) by default. Similar-search embeddings require PostgreSQL + pgvector (see `docker-compose.pgvector.yml` and [docs/vector-search.md](docs/vector-search.md)).
+Creates `pharma.db` (SQLite) by default. For similar-search locally:
+
+```bash
+docker compose -f docker-compose.pgvector.yml up -d
+# set DATABASE_URL=postgresql://pharma:pharma@127.0.0.1:5432/pharma in .env
+```
+
+See [docs/vector-search.md](docs/vector-search.md).
 
 ### 5. Run the API
 
@@ -69,20 +75,10 @@ This creates `pharma.db` (SQLite) by default. Similar-search embeddings require 
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-- Health: [http://localhost:8000/](http://localhost:8000/)
-- OpenAPI docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Liveness: [http://localhost:8000/health/live](http://localhost:8000/health/live)
+- OpenAPI: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### 6. Run the Streamlit UI
-
-In a second terminal (venv activated):
-
-```bash
-streamlit run frontend/app.py
-```
-
-Default UI: [http://localhost:8501](http://localhost:8501). The UI calls `http://localhost:8000`.
-
-### 7. Run the React UI (recommended)
+### 6. Run the React UI (primary)
 
 ```bash
 cd frontend-web
@@ -91,38 +87,51 @@ npm install
 npm run dev
 ```
 
-App: [http://localhost:5173](http://localhost:5173). Set backend `CORS_ORIGINS` to include `http://localhost:5173`. See [frontend-web/README.md](frontend-web/README.md).
+App: [http://localhost:5173](http://localhost:5173). Set `VITE_API_URL` if the API is not on `http://127.0.0.1:8001` (see `frontend-web/.env.example`).
+
+### 7. Legacy Streamlit UI (optional)
+
+```bash
+streamlit run frontend/app.py
+```
+
+Streamlit does **not** send JWTs — prefer React for auth-aware flows.
 
 ## Project layout
 
 ```
-backend/          FastAPI app, routers, DB models, services
-frontend/         Streamlit UI
-scripts/          DB init and utility scripts
-docs/             Environment and operational docs
+backend/          FastAPI app, routers, models, services
+frontend-web/     React staff UI (primary)
+frontend/         Streamlit UI (legacy)
+scripts/          DB init, reindex, smoke helpers
+docs/             Architecture and operational docs
+tests/            pytest suite
 ```
 
 ## API overview
 
 | Area | Prefix | Notes |
 |------|--------|--------|
+| Health | `/health` | live / ready (DB + pgvector) |
+| Auth | `/auth` | login, users, audit |
 | Inventory | `/inventory` | CRUD, low-stock, sell/invoice |
-| Search | `/search` | Similar medicines via embeddings |
-| OCR | `/ocr` | Prescription image → structured JSON |
+| Sales | `/sales` | summary, history, void |
+| Search | `/search` | similar medicines, reindex |
+| OCR | `/ocr` | prescription image → JSON |
+| Agent | `/agent` | NL inventory chat |
 
 ## Documentation
 
+- [System architecture](docs/architecture.md) — diagrams, services, request flows
 - [Environment variables & secrets](docs/environment.md)
 - [Authentication & roles](docs/auth.md)
 - [Deployment (Render + Postgres + S3)](docs/deployment.md)
-- [Backend architecture](docs/architecture.md)
 - [Vector search / reindex](docs/vector-search.md)
+- [Inventory chat agent](docs/inventory-agent.md)
 - [Testing](docs/testing.md)
 - [Dependency files](docs/dependencies.md)
 
 ## Smoke test / pytest
-
-With the venv activated and API packages installed:
 
 ```bash
 python scripts/smoke_test.py
@@ -131,4 +140,3 @@ pytest -q
 ```
 
 See [docs/testing.md](docs/testing.md).
-

@@ -1,14 +1,17 @@
 # Authentication
 
 PharmaAssist uses **JWT Bearer** tokens and role-based access control.
+Primary UI: React `frontend-web` (sends `Authorization` on staff routes).
+
+System context: [architecture.md](architecture.md).
 
 ## Roles
 
-| Role | Read inventory | Add / update / delete | Sell | OCR / search | Register users / audit |
-|------|----------------|-----------------------|------|--------------|-------------------------|
-| `cashier` | Yes | No | Yes | Yes | No |
-| `pharmacist` | Yes | Yes | Yes | Yes | No |
-| `admin` | Yes | Yes | Yes | Yes | Yes |
+| Role | Read inventory | Add / update / delete | Sell | OCR / search / agent | Reindex | Register users / audit |
+|------|----------------|-----------------------|------|----------------------|---------|-------------------------|
+| `cashier` | Yes | No | Yes | Yes | No | No |
+| `pharmacist` | Yes | Yes | Yes | Yes | Yes | No |
+| `admin` | Yes | Yes | Yes | Yes | Yes | Yes |
 
 ## Endpoints
 
@@ -21,7 +24,7 @@ PharmaAssist uses **JWT Bearer** tokens and role-based access control.
 | PATCH | `/auth/users/{id}` | Admin |
 | GET | `/auth/audit` | Admin |
 
-Inventory, search, and OCR routes require a valid Bearer token.
+Inventory, sales, search, OCR, and agent routes require a valid Bearer token.
 
 ## Local setup
 
@@ -49,9 +52,10 @@ curl -X POST http://localhost:8000/auth/login \
 Successful **sell**, **delete**, **staff register**, and **staff update** actions write rows to `audit_logs` (who, action, entity, JSON details). Admins list them via `GET /auth/audit` or the React **Admin** page (`/admin`).
 
 Staff management rules:
+
 - Admins cannot deactivate their own account.
 - The last active admin cannot be demoted or deactivated.
 
 ## Streamlit note
 
-The Streamlit UI does not send JWTs. Prefer the React app for auth-aware flows (`frontend-web`).
+The Streamlit UI does **not** send JWTs. Prefer the React app for auth-aware flows (`frontend-web`).
