@@ -78,7 +78,7 @@ def test_sell_rolls_back_when_second_item_missing(
         headers=pharmacist_headers,
     )
     assert failed.status_code == 400
-    assert "DoesNotExist" in failed.json()["detail"]
+    assert "DoesNotExist" in failed.json()["error"]["message"]
 
     remaining = client.get("/inventory/all", headers=pharmacist_headers).json()[0]["quantity"]
     assert remaining == 20
