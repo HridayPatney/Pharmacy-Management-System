@@ -14,22 +14,21 @@ PharmaAssist loads configuration from the process environment and optionally fro
 | `GEMINI_OCR_MODEL` | No | `gemini-3-flash-preview` | Model for OCR (and agent if `GEMINI_AGENT_MODEL` unset) |
 | `GEMINI_AGENT_MODEL` | No | same as OCR model | Optional override for `POST /agent/query` tool planning |
 | `CORS_ORIGINS` | No | `http://localhost:8501` | Comma-separated allowed origins for the FastAPI CORS middleware |
-| `DATABASE_URL` | No | `sqlite:///<repo>/pharma.db` | SQLAlchemy URL (Render Postgres in production) |
-| `CHROMA_PATH` | No | `<repo>/chroma_store` | Persistent Chroma directory |
-| `CHROMA_COLLECTION` | No | `medicine_embeddings` | Chroma collection name |
-| `EMBEDDING_MODEL` | No | `all-MiniLM-L6-v2` | Sentence-transformers model for embeddings |
-| `S3_BUCKET` / `S3_REGION` / `AWS_*` | For S3 | _(none)_ | Prescription object storage (follow-up) |
+| `DATABASE_URL` | No | `sqlite:///<repo>/pharma.db` | SQLAlchemy URL (Postgres required for pgvector similar-search) |
+| `EMBEDDING_MODEL` | No | `all-MiniLM-L6-v2` | Documented 384-d MiniLM model (ONNX via Chroma EF) |
+| `S3_BUCKET` / `S3_REGION` / `AWS_*` | For S3 | _(none)_ | Prescription object storage |
 
-Changing `CHROMA_COLLECTION` or `EMBEDDING_MODEL` without reindexing makes existing embeddings unusable for search.
+Changing the embedding model without reindexing makes existing vectors unusable for search.
 
 ## Local setup
 
 1. Copy `.env.example` to `.env` in the repository root.
 2. Set `GEMINI_API_KEY` to a key from [Google AI Studio](https://aistudio.google.com/apikey).
 3. Adjust `CORS_ORIGINS` if the UI runs on a different host or port.
-4. Optionally set `DATABASE_URL` / `CHROMA_PATH` for non-default storage locations.
+4. Optional for similar-search: `docker compose -f docker-compose.pgvector.yml up -d` and set
+   `DATABASE_URL=postgresql://pharma:pharma@127.0.0.1:5432/pharma`.
 
-OCR endpoints raise a clear error if `GEMINI_API_KEY` is missing. Inventory and search do not require Gemini.
+OCR endpoints raise a clear error if `GEMINI_API_KEY` is missing. Inventory works without Gemini; semantic similar-search needs Postgres.
 
 ## Secret hygiene
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
@@ -11,7 +12,7 @@ from backend.db.database import Base
 
 
 class Medicine(Base):
-    """A single inventory item tracked in SQLite/Postgres and mirrored in Chroma."""
+    """A single inventory item tracked in SQLite/Postgres (vectors in pgvector)."""
 
     __tablename__ = "medicines"
 
@@ -21,6 +22,23 @@ class Medicine(Base):
     quantity = Column(Integer, default=0)
     price = Column(Float, nullable=False)
     expiry_date = Column(Date, nullable=False)
+
+
+class MedicineEmbedding(Base):
+    """pgvector row for similar-medicine search (Postgres only; skipped on SQLite)."""
+
+    __tablename__ = "medicine_embeddings"
+
+    medicine_id = Column(
+        String,
+        ForeignKey("medicines.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    name = Column(String, nullable=False)
+    summary = Column(Text, nullable=True)
+    # 384 = all-MiniLM-L6-v2 / Chroma DefaultEmbeddingFunction
+    embedding = Column(Vector(384), nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class User(Base):

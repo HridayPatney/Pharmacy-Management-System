@@ -1,4 +1,4 @@
-"""API tests for inventory CRUD, sell integrity, and Chroma sync failures."""
+"""API tests for inventory CRUD, sell integrity, and vector sync failures."""
 
 from __future__ import annotations
 
@@ -122,11 +122,11 @@ def test_low_stock(client, sample_medicine_payload, pharmacist_headers):
     assert len(low.json()) == 1
 
 
-def test_add_succeeds_when_chroma_sync_fails_but_row_persists(
+def test_add_succeeds_when_vector_sync_fails_but_row_persists(
     client, sample_medicine_payload, vector_mocks, pharmacist_headers
 ):
     """Inventory save must not fail if background/index sync errors."""
-    vector_mocks.add_medicine_to_vector_db.side_effect = RuntimeError("chroma down")
+    vector_mocks.add_medicine_to_vector_db.side_effect = RuntimeError("pgvector down")
 
     response = client.post(
         "/inventory/add", json=sample_medicine_payload, headers=pharmacist_headers

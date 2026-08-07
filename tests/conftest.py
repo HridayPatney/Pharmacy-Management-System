@@ -47,8 +47,12 @@ def _stub_ml_modules() -> MagicMock:
     )
     fake_collection = MagicMock()
     fake_collection.count.return_value = 0
-    vector_mod.get_collection = MagicMock(return_value=fake_collection)
+    vector_mod.get_collection = MagicMock(side_effect=RuntimeError("chroma removed"))
     vector_mod.reset_collection_for_tests = MagicMock()
+    vector_mod.vectors_enabled = MagicMock(return_value=False)
+    vector_mod.pgvector_status = MagicMock(
+        return_value={"status": "skipped", "detail": "sqlite test stub"}
+    )
     sys.modules["backend.services.vector_search"] = vector_mod
 
     drug_mod = MagicMock()
@@ -103,6 +107,10 @@ def client(tmp_path, monkeypatch, vector_mocks):
 
     config.get_database_url.cache_clear()
     config.get_jwt_secret.cache_clear()
+    # ``load_dotenv`` (on first config import) may have re-applied developer ``.env``;
+    # clear bootstrap after imports so TestClient lifespan does not seed a second admin.
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_EMAIL", "")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", "")
     database.DATABASE_URL = config.get_database_url()
     database.engine = database.create_engine(
         database.DATABASE_URL,
@@ -115,15 +123,18 @@ def client(tmp_path, monkeypatch, vector_mocks):
     from backend.db import models  # noqa: F401
     from backend.main import app
 
-    database.Base.metadata.drop_all(bind=database.engine)
-    database.Base.metadata.create_all(bind=database.engine)
+    tables = [
+        t for t in database.Base.metadata.sorted_tables if t.name != "medicine_embeddings"
+    ]
+    database.Base.metadata.drop_all(bind=database.engine, tables=tables)
+    database.Base.metadata.create_all(bind=database.engine, tables=tables)
 
     from fastapi.testclient import TestClient
 
     with TestClient(app) as test_client:
         yield test_client
 
-    database.Base.metadata.drop_all(bind=database.engine)
+    database.Base.metadata.drop_all(bind=database.engine, tables=tables)
     database.engine.dispose()
 
 

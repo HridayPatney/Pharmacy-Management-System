@@ -1,94 +1,148 @@
-"""Chroma-backed embeddings for medicine similarity search.
+"""Postgres/pgvector embeddings for medicine similarity search.
 
-Chroma is initialized on **first use**, not at import time, so ``GET /`` stays fast.
-
-Uses Chroma's default ONNX MiniLM embedding function (no PyTorch install required).
-See ``docs/vector-search.md``.
+Vectors are stored in ``medicine_embeddings`` (same DB as inventory). On SQLite
+(local default), vector ops are no-ops / empty results — use Postgres to exercise
+similar-search (Docker ``pgvector/pgvector`` or Render).
 """
 
 from __future__ import annotations
 
-import threading
+import logging
+from datetime import datetime
 from typing import Any
 
-from backend.core.config import get_chroma_collection_name, get_chroma_path
+from sqlalchemy import select, text
 
-_lock = threading.Lock()
-_collection: Any | None = None
+from backend.core.config import get_database_url
+
+logger = logging.getLogger(__name__)
 
 
-def get_collection():
-    """Return the shared Chroma collection, creating the client on first call."""
-    global _collection
-    if _collection is not None:
-        return _collection
-
-    with _lock:
-        if _collection is not None:
-            return _collection
-
-        import chromadb
-        from chromadb.utils import embedding_functions
-
-        client = chromadb.PersistentClient(path=get_chroma_path())
-        # DefaultEmbeddingFunction uses ONNX MiniLM via onnxruntime (bundled with Chroma).
-        _collection = client.get_or_create_collection(
-            name=get_chroma_collection_name(),
-            embedding_function=embedding_functions.DefaultEmbeddingFunction(),
-        )
-        return _collection
+def vectors_enabled() -> bool:
+    """True when ``DATABASE_URL`` is PostgreSQL (pgvector path)."""
+    return get_database_url().startswith("postgresql")
 
 
 def reset_collection_for_tests() -> None:
-    """Clear the cached collection (test helper only)."""
-    global _collection
-    with _lock:
-        _collection = None
+    """Compat shim for older tests; clears embedding cache."""
+    from backend.services.embeddings import reset_embedding_fn_for_tests
+
+    reset_embedding_fn_for_tests()
 
 
-def add_medicine_to_vector_db(medicine_id, medicine_name, description):
-    """Add or replace a medicine description in the Chroma collection.
-
-    Callers (``vector_sync``) are responsible for translating failures into API errors.
-    """
-    collection = get_collection()
-    existing = collection.get(ids=[medicine_id])
-    if existing and existing.get("ids"):
-        collection.delete(ids=[medicine_id])
-
-    collection.add(
-        documents=[description or ""],
-        metadatas=[{"name": medicine_name}],
-        ids=[medicine_id],
+def get_collection() -> Any:
+    """Deprecated Chroma hook — prefer ``vectors_enabled`` / health pgvector check."""
+    raise RuntimeError(
+        "Chroma PersistentClient was removed; similar-search uses Postgres pgvector. "
+        "Set DATABASE_URL to PostgreSQL and call /search/reindex."
     )
 
 
-def delete_medicine_from_vector_db(medicine_id):
-    """Remove a medicine from the Chroma vector collection.
+def add_medicine_to_vector_db(medicine_id, medicine_name, description) -> None:
+    """Upsert a medicine embedding in Postgres. No-op on SQLite."""
+    if not vectors_enabled():
+        logger.debug("Skipping vector upsert on non-Postgres DB for id=%s", medicine_id)
+        return
 
-    Missing ids are ignored; other Chroma errors propagate to the caller.
+    from backend.db.database import SessionLocal
+    from backend.db.models import MedicineEmbedding
+    from backend.services.embeddings import embed_text
+
+    vector = embed_text(description or "")
+    db = SessionLocal()
+    try:
+        row = db.get(MedicineEmbedding, medicine_id)
+        if row is None:
+            row = MedicineEmbedding(
+                medicine_id=medicine_id,
+                name=medicine_name,
+                summary=description or "",
+                embedding=vector,
+                updated_at=datetime.utcnow(),
+            )
+            db.add(row)
+        else:
+            row.name = medicine_name
+            row.summary = description or ""
+            row.embedding = vector
+            row.updated_at = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
+
+
+def delete_medicine_from_vector_db(medicine_id) -> None:
+    """Delete a medicine embedding. No-op on SQLite; missing rows ignored."""
+    if not vectors_enabled():
+        logger.debug("Skipping vector delete on non-Postgres DB for id=%s", medicine_id)
+        return
+
+    from backend.db.database import SessionLocal
+    from backend.db.models import MedicineEmbedding
+
+    db = SessionLocal()
+    try:
+        row = db.get(MedicineEmbedding, medicine_id)
+        if row is not None:
+            db.delete(row)
+            db.commit()
+    finally:
+        db.close()
+
+
+def search_similar_medicines(query_text, top_k=5) -> list[dict[str, Any]]:
+    """Return up to ``top_k`` similar in-stock medicines for ``query_text``.
+
+    Each result is ``{"name": str, "score": float}`` where ``score`` is cosine
+    distance (lower is closer). Empty list on SQLite or when no embeddings exist.
     """
-    collection = get_collection()
-    existing = collection.get(ids=[medicine_id])
-    if existing and existing.get("ids"):
-        collection.delete(ids=[medicine_id])
+    if not vectors_enabled():
+        return []
+
+    from backend.db.database import SessionLocal
+    from backend.db.models import Medicine, MedicineEmbedding
+    from backend.services.embeddings import embed_text
+
+    if not (query_text or "").strip():
+        return []
+
+    query_vec = embed_text(query_text)
+    distance = MedicineEmbedding.embedding.cosine_distance(query_vec)
+
+    db = SessionLocal()
+    try:
+        stmt = (
+            select(Medicine.name, distance.label("score"))
+            .join(Medicine, Medicine.id == MedicineEmbedding.medicine_id)
+            .where(Medicine.quantity > 0)
+            .order_by(distance)
+            .limit(top_k)
+        )
+        rows = db.execute(stmt).all()
+        return [{"name": name, "score": float(score)} for name, score in rows]
+    finally:
+        db.close()
 
 
-def search_similar_medicines(query_text, top_k=5):
-    """Return up to ``top_k`` similar medicines for ``query_text``.
+def pgvector_status() -> dict[str, Any]:
+    """Health helper: extension + table reachability on Postgres."""
+    if not vectors_enabled():
+        return {
+            "status": "skipped",
+            "detail": "Vector search requires PostgreSQL (SQLite stubs vectors)",
+        }
+    from backend.db.database import SessionLocal
 
-    Each result is ``{"name": str, "score": float}`` where ``score`` is Chroma
-    distance (lower is more similar).
-    """
-    results = get_collection().query(
-        query_texts=[query_text],
-        n_results=top_k,
-    )
-
-    matches = []
-    for i in range(len(results["documents"][0])):
-        matches.append({
-            "name": results["metadatas"][0][i]["name"],
-            "score": results["distances"][0][i],
-        })
-    return matches
+    db = SessionLocal()
+    try:
+        ext = db.execute(
+            text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+        ).scalar()
+        if not ext:
+            return {"status": "fail", "detail": "pgvector extension not installed"}
+        count = db.execute(text("SELECT COUNT(*) FROM medicine_embeddings")).scalar()
+        return {"status": "ok", "detail": f"embeddings={count}"}
+    except Exception as exc:
+        return {"status": "fail", "detail": str(exc)}
+    finally:
+        db.close()

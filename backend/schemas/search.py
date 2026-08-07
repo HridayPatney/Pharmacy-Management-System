@@ -13,7 +13,7 @@ class SearchRequest(BaseModel):
 
 
 class SearchResult(BaseModel):
-    """One similar-medicine hit (``score`` is Chroma distance; lower is closer)."""
+    """One similar-medicine hit (``score`` is cosine distance; lower is closer)."""
 
     name: str
     score: float
@@ -21,3 +21,9 @@ class SearchResult(BaseModel):
         default=None,
         description="Current on-hand stock when filtered to inventory",
     )
+
+
+class ReindexResponse(BaseModel):
+    """Result of ``POST /search/reindex``."""
+
+    scheduled: int

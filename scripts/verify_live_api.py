@@ -61,9 +61,15 @@ def main() -> int:
 
     status, body = call("GET", "/health/ready")
     print(f"GET /health/ready -> {status} status={body.get('status')} checks={body.get('checks')}")
-    if status != 200 or body.get("checks", {}).get("chroma", {}).get("status") != "ok":
-        print("FAIL: chroma not ready (install ML deps / restart API)")
+    if status != 200:
+        print("FAIL: /health/ready not 200")
         return 1
+    pv = body.get("checks", {}).get("pgvector", {})
+    if pv.get("status") not in ("ok", "skipped"):
+        print(f"FAIL: pgvector not ready: {pv}")
+        return 1
+    if pv.get("status") == "skipped":
+        print("WARN: pgvector skipped (SQLite) — similar-search needs Postgres")
 
     status, body = call("POST", "/auth/login", body={"email": email, "password": password})
     print(f"POST /auth/login -> {status}")

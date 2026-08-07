@@ -1,9 +1,10 @@
-"""Helpers for keeping Chroma in sync after inventory commits.
+"""Helpers for keeping pgvector in sync after inventory commits.
 
 Policy (documented in ``docs/architecture.md``):
 
 * SQL inventory is the source of truth for stock and medicine fields.
-* Chroma is updated **after** a successful SQL commit.
+* Embeddings (Postgres/pgvector) are updated **after** a successful SQL commit.
+* On SQLite, vector upserts are no-ops (similar-search is Postgres-only).
 * Add/update indexing runs in a **background thread** so the HTTP response
   returns as soon as the row is saved (drug summary + embedding can be slow).
 * Failures are logged; inventory is never rolled back for vector issues.
@@ -61,7 +62,7 @@ def _upsert_job(medicine_id: str, medicine_name: str, summary: str) -> None:
         add_medicine_to_vector_db(medicine_id, medicine_name, summary)
     except Exception:
         logger.exception(
-            "Chroma upsert failed for medicine id=%s name=%s", medicine_id, medicine_name
+            "pgvector upsert failed for medicine id=%s name=%s", medicine_id, medicine_name
         )
 
 
@@ -69,7 +70,7 @@ def _delete_job(medicine_id: str) -> None:
     try:
         delete_medicine_from_vector_db(medicine_id)
     except Exception:
-        logger.exception("Chroma delete failed for medicine id=%s", medicine_id)
+        logger.exception("pgvector delete failed for medicine id=%s", medicine_id)
 
 
 def schedule_medicine_embedding(medicine_id: str, medicine_name: str, summary: str) -> None:
@@ -119,3 +120,17 @@ def sync_medicine_embedding(medicine_id: str, medicine_name: str, summary: str) 
 def remove_medicine_embedding(medicine_id: str) -> None:
     """Schedule delete; does not raise HTTP errors."""
     schedule_remove_medicine_embedding(medicine_id)
+
+
+def reindex_all_medicines(db: Any) -> dict[str, int]:
+    """Queue embedding rebuild for every medicine in SQL inventory.
+
+    Use after deploy or when ``medicine_embeddings`` is empty. Inventory remains
+    the source of truth; this re-populates pgvector (no-op on SQLite).
+    """
+    from backend.db import models
+
+    rows = db.query(models.Medicine).order_by(models.Medicine.name).all()
+    for med in rows:
+        schedule_medicine_embedding_fetch(med.id, med.name)
+    return {"scheduled": len(rows)}

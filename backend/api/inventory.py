@@ -49,7 +49,7 @@ def add_medicine(
     db.commit()
     db.refresh(new_med)
 
-    # Drug-summary fetch + Chroma upsert are slow — do not block the response.
+    # Drug-summary fetch + embedding upsert are slow — do not block the response.
     schedule_medicine_embedding_fetch(new_med.id, new_med.name)
 
     return new_med
@@ -133,7 +133,7 @@ def delete_medicine(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
 ):
-    """Delete a medicine from the DB and remove its Chroma embedding."""
+    """Delete a medicine from the DB and remove its pgvector embedding."""
     med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
     if not med:
         raise HTTPException(status_code=404, detail="Medicine not found")

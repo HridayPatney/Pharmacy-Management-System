@@ -34,11 +34,21 @@ pytest -k sell
 | Pydantic schemas | `tests/test_schemas.py` |
 | Auth / roles / audit | `tests/test_auth.py` |
 | Health, errors, pagination, S3/local OCR, full API contract | `tests/test_api_polish.py` |
-| Inventory + transactional sell + Chroma 503 | `tests/test_inventory_api.py` |
+| Inventory + transactional sell + vector sync failures | `tests/test_inventory_api.py` |
 | OCR temp-file cleanup | `tests/test_ocr_api.py` |
-| Lazy Chroma init | `tests/test_vector_search_lazy.py` |
+| SQLite vector stub (no embedder) | `tests/test_vector_search_lazy.py` |
+| pgvector unit (mocked Postgres path) | `tests/test_pgvector_unit.py` |
+| Optional Docker pgvector IT | `tests/test_pgvector_docker.py` (`RUN_PGVECTOR_IT=1`) |
 
-Chroma, sentence-transformers, OpenCV, and Gemini are stubbed in `tests/conftest.py` so tests do not need the full ML install.
+OCR/Gemini are stubbed in `tests/conftest.py`. Default suite uses SQLite (vectors stubbed). For live Postgres:
+
+```bash
+docker compose -f docker-compose.pgvector.yml up -d
+set RUN_PGVECTOR_IT=1
+pytest tests/test_pgvector_docker.py
+# or: python scripts/docker_pgvector_smoke.py
+```
+
 
 ### Conventions
 
