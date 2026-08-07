@@ -5,6 +5,7 @@ from __future__ import annotations
 from difflib import SequenceMatcher
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.core.deps import require_roles
@@ -13,7 +14,7 @@ from backend.db import models
 from backend.db.database import get_db
 from backend.schemas.search import ReindexResponse, SearchRequest, SearchResult
 from backend.services.drug_api import fetch_drug_summary
-from backend.services.vector_search import search_similar_medicines
+from backend.services.vector_search import search_similar_medicines, vectors_enabled
 from backend.services.vector_sync import reindex_all_medicines
 
 router = APIRouter()
@@ -44,6 +45,25 @@ def _query_text_for_search(medicine_name: str) -> str:
     if summary and summary != "No data found.":
         return summary
     return name
+
+
+def _inventory_match(db: Session, medicine_name: str) -> models.Medicine | None:
+    """Case-insensitive inventory lookup (any stock level, including zero)."""
+    name = medicine_name.strip()
+    if not name:
+        return None
+    return (
+        db.query(models.Medicine)
+        .filter(func.lower(models.Medicine.name) == name.lower())
+        .first()
+    )
+
+
+def _has_stored_embedding(db: Session, medicine_id: str) -> bool:
+    """True when Postgres has an embedding row for this inventory id."""
+    if not vectors_enabled():
+        return False
+    return db.get(models.MedicineEmbedding, medicine_id) is not None
 
 
 def _inventory_name_fallback(
@@ -97,22 +117,42 @@ def find_similar(
 ):
     """Find **other** in-stock inventory medicines similar to ``medicine_name``.
 
-    Results are intersected with current inventory (quantity > 0) and never
-    include the queried medicine itself.
+    If the queried name matches an inventory row that already has a pgvector
+    embedding (including zero/low stock), that stored vector is reused instead
+    of fetching a drug summary and re-embedding. Results never include the
+    queried medicine itself and require quantity > 0.
     """
-    query_text = _query_text_for_search(request.medicine_name)
-    if not query_text:
+    name = request.medicine_name.strip()
+    if not name:
         raise HTTPException(status_code=400, detail="medicine_name is required")
+
+    matched = _inventory_match(db, name)
+    exclude_id = matched.id if matched else None
 
     # Over-fetch so we still have enough after inventory / self filters.
     fetch_k = min(50, max(request.top_k * 5, 20))
-    raw = search_similar_medicines(query_text=query_text, top_k=fetch_k)
+
+    if matched and _has_stored_embedding(db, matched.id):
+        raw = search_similar_medicines(
+            query_medicine_id=matched.id,
+            top_k=fetch_k,
+            exclude_medicine_id=exclude_id,
+        )
+    else:
+        query_text = _query_text_for_search(name)
+        if not query_text:
+            raise HTTPException(status_code=400, detail="medicine_name is required")
+        raw = search_similar_medicines(
+            query_text=query_text,
+            top_k=fetch_k,
+            exclude_medicine_id=exclude_id,
+        )
 
     in_stock = {
         m.name: m
         for m in db.query(models.Medicine).filter(models.Medicine.quantity > 0).all()
     }
-    by_lower = {name.lower(): med for name, med in in_stock.items()}
+    by_lower = {stock_name.lower(): med for stock_name, med in in_stock.items()}
 
     results: list[SearchResult] = []
     seen: set[str] = set()
@@ -120,10 +160,12 @@ def find_similar(
         hit_name = (hit.get("name") or "").strip()
         if not hit_name:
             continue
-        if _is_same_medicine(request.medicine_name, hit_name):
+        if _is_same_medicine(name, hit_name):
             continue
         med = by_lower.get(hit_name.lower())
         if med is None:
+            continue
+        if exclude_id and med.id == exclude_id:
             continue
         key = med.name.lower()
         if key in seen:
@@ -141,8 +183,6 @@ def find_similar(
             break
 
     if not results:
-        results = _inventory_name_fallback(
-            db, request.medicine_name, request.top_k, request.medicine_name
-        )
+        results = _inventory_name_fallback(db, name, request.top_k, name)
 
     return results
