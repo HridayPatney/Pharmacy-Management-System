@@ -3,16 +3,17 @@ import { extractOcr, listAllMedicines, listMedicines, searchSimilar, sellMedicin
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
+import {
+  medicineKey,
+  mergeMedicineCatalogs,
+  resolveSellLines,
+} from '../lib/inventoryResolve'
 import type { Invoice, Medicine, SearchResult } from '../types/api'
 
 interface LineItem {
   name: string
   quantity: number
   medicineId?: string
-}
-
-function lineKey(name: string): string {
-  return name.trim().toLowerCase()
 }
 
 export function OcrInvoicePage() {
@@ -30,7 +31,7 @@ export function OcrInvoicePage() {
 
   const stockByName = useMemo(() => {
     const map = new Map<string, Medicine>()
-    for (const m of inventory) map.set(m.name.toLowerCase(), m)
+    for (const m of inventory) map.set(medicineKey(m.name), m)
     return map
   }, [inventory])
 
@@ -82,7 +83,7 @@ export function OcrInvoicePage() {
       for (const line of lines) {
         const name = line.name.trim()
         if (!name) continue
-        const stock = stockByName.get(name.toLowerCase())
+        const stock = stockByName.get(medicineKey(name))
         if (!stock || stock.quantity < line.quantity) {
           nextAlts[name] = await searchSimilar(token, name, 8)
         }
@@ -102,26 +103,24 @@ export function OcrInvoicePage() {
     setBusy(true)
     setError(null)
     try {
-      const items = await listAllMedicines(token)
-      const byId = new Map<string, Medicine>()
-      const byName = new Map<string, Medicine>()
-      for (const m of items) {
-        byId.set(m.id, m)
-        byName.set(m.name.toLowerCase(), m)
+      const preset = lines.map((l) => {
+        const stock = stockByName.get(medicineKey(l.name))
+        return {
+          ...l,
+          medicineId: l.medicineId ?? stock?.id,
+          name: stock?.name ?? l.name,
+        }
+      })
+
+      const fresh = await refreshInventory()
+      let all: Medicine[] = []
+      try {
+        all = await listAllMedicines(token)
+      } catch {
+        all = []
       }
-      const resolved = lines
-        .map((l) => {
-          const trimmed = l.name.trim()
-          const stock =
-            (l.medicineId ? byId.get(l.medicineId) : undefined) ??
-            byName.get(trimmed.toLowerCase())
-          return {
-            id: stock?.id,
-            name: stock?.name ?? trimmed,
-            quantity: l.quantity,
-          }
-        })
-        .filter((l) => l.name && l.quantity > 0)
+      const catalog = mergeMedicineCatalogs(inventory, fresh, all)
+      const resolved = resolveSellLines(preset, catalog)
       if (!resolved.length) {
         setError('Add at least one medicine line.')
         return
@@ -189,7 +188,7 @@ export function OcrInvoicePage() {
       <section className="panel stack">
         <h2>Medicines</h2>
         {lines.map((line, idx) => {
-          const stock = stockByName.get(line.name.trim().toLowerCase())
+          const stock = stockByName.get(medicineKey(line.name))
           return (
             <div className="row" key={idx}>
               <label style={{ flex: 2 }}>
@@ -197,8 +196,10 @@ export function OcrInvoicePage() {
                 <input
                   value={line.name}
                   onChange={(e) => {
+                    const name = e.target.value
+                    const matched = stockByName.get(medicineKey(name))
                     const next = [...lines]
-                    next[idx] = { ...line, name: e.target.value, medicineId: undefined }
+                    next[idx] = { ...line, name, medicineId: matched?.id }
                     setLines(next)
                   }}
                 />
@@ -264,7 +265,7 @@ export function OcrInvoicePage() {
                 ) : (
                   <ul>
                     {results.map((r) => (
-                      <li key={r.name}>
+                      <li key={r.medicine_id || r.name}>
                         {r.name}
                         {r.quantity != null ? ` (stock ${r.quantity})` : ''}{' '}
                         <button
@@ -273,7 +274,7 @@ export function OcrInvoicePage() {
                           onClick={() =>
                             setLines((prev) =>
                               prev.map((l) =>
-                                lineKey(l.name) === lineKey(name)
+                                medicineKey(l.name) === medicineKey(name)
                                   ? { ...l, name: r.name, medicineId: r.medicine_id }
                                   : l,
                               ),
