@@ -21,10 +21,11 @@ class MedicineSchema(BaseModel):
 
 
 class SellItem(BaseModel):
-    """One line item in a sell request (matched by medicine name)."""
+    """One line item in a sell request (matched by id and/or medicine name)."""
 
     name: str
     quantity: int = Field(gt=0)
+    id: str | None = None
 
 
 class SellRequest(BaseModel):

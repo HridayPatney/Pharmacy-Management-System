@@ -77,10 +77,41 @@ def test_sell_rolls_back_when_second_item_missing(
         },
         headers=pharmacist_headers,
     )
-    assert failed.status_code == 404
+    assert failed.status_code == 400
+    assert "DoesNotExist" in failed.json()["error"]["message"]
 
     remaining = client.get("/inventory/all", headers=pharmacist_headers).json()[0]["quantity"]
     assert remaining == 20
+
+
+def test_sell_matches_name_case_insensitively(
+    client, sample_medicine_payload, pharmacist_headers
+):
+    client.post("/inventory/add", json=sample_medicine_payload, headers=pharmacist_headers)
+    sold = client.post(
+        "/inventory/sell",
+        json={"medicines": [{"name": "aspirin", "quantity": 1}]},
+        headers=pharmacist_headers,
+    )
+    assert sold.status_code == 200
+    assert sold.json()["invoice"]["items"][0]["name"] == "Aspirin"
+
+
+def test_sell_matches_by_medicine_id(
+    client, sample_medicine_payload, pharmacist_headers
+):
+    client.post("/inventory/add", json=sample_medicine_payload, headers=pharmacist_headers)
+    sold = client.post(
+        "/inventory/sell",
+        json={
+            "medicines": [
+                {"id": "med-1", "name": "wrong-label", "quantity": 1},
+            ]
+        },
+        headers=pharmacist_headers,
+    )
+    assert sold.status_code == 200
+    assert sold.json()["invoice"]["items"][0]["name"] == "Aspirin"
 
 
 def test_sell_rolls_back_when_insufficient_stock(

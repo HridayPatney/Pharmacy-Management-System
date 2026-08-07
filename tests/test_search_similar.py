@@ -56,6 +56,7 @@ def test_similar_excludes_self_and_requires_stock(
     assert "Lipitor" not in names  # typo-close to query / same brand
     assert "Simvastatin" not in names  # zero stock
     assert names == ["Atorvastatin"]
+    assert body[0]["medicine_id"] == "ato-1"
     assert body[0]["quantity"] == 12
 
 
@@ -87,4 +88,6 @@ def test_similar_falls_back_when_drug_summary_missing(
         headers=pharmacist_headers,
     )
     assert res.status_code == 200
-    assert res.json()[0]["name"] == "Atorvastatin"
+    body = res.json()
+    assert body[0]["name"] == "Atorvastatin"
+    assert body[0]["medicine_id"] == "ato-2"

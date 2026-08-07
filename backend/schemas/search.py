@@ -15,6 +15,7 @@ class SearchRequest(BaseModel):
 class SearchResult(BaseModel):
     """One similar-medicine hit (``score`` is cosine distance; lower is closer)."""
 
+    medicine_id: str
     name: str
     score: float
     quantity: int | None = Field(

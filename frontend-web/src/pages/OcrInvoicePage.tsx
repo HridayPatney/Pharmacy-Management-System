@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { extractOcr, listMedicines, searchSimilar, sellMedicines } from '../api/pharmacy'
+import { extractOcr, listAllMedicines, listMedicines, searchSimilar, sellMedicines } from '../api/pharmacy'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
@@ -8,6 +8,11 @@ import type { Invoice, Medicine, SearchResult } from '../types/api'
 interface LineItem {
   name: string
   quantity: number
+  medicineId?: string
+}
+
+function lineKey(name: string): string {
+  return name.trim().toLowerCase()
 }
 
 export function OcrInvoicePage() {
@@ -29,10 +34,11 @@ export function OcrInvoicePage() {
     return map
   }, [inventory])
 
-  async function refreshInventory() {
-    if (!token) return
+  async function refreshInventory(): Promise<Medicine[]> {
+    if (!token) return []
     const data = await listMedicines(token, { page: 1, limit: 100, sort: 'name' })
     setInventory(data.items)
+    return data.items
   }
 
   async function onUpload(file: File | null) {
@@ -93,17 +99,41 @@ export function OcrInvoicePage() {
   async function onSell(e: FormEvent) {
     e.preventDefault()
     if (!token) return
-    const medicines = lines
-      .map((l) => ({ name: l.name.trim(), quantity: l.quantity }))
-      .filter((l) => l.name && l.quantity > 0)
-    if (!medicines.length) {
-      setError('Add at least one medicine line.')
-      return
-    }
     setBusy(true)
     setError(null)
     try {
-      const res = await sellMedicines(token, medicines, { patient, doctor, clinic })
+      const items = await listAllMedicines(token)
+      const byId = new Map<string, Medicine>()
+      const byName = new Map<string, Medicine>()
+      for (const m of items) {
+        byId.set(m.id, m)
+        byName.set(m.name.toLowerCase(), m)
+      }
+      const resolved = lines
+        .map((l) => {
+          const trimmed = l.name.trim()
+          const stock =
+            (l.medicineId ? byId.get(l.medicineId) : undefined) ??
+            byName.get(trimmed.toLowerCase())
+          return {
+            id: stock?.id,
+            name: stock?.name ?? trimmed,
+            quantity: l.quantity,
+          }
+        })
+        .filter((l) => l.name && l.quantity > 0)
+      if (!resolved.length) {
+        setError('Add at least one medicine line.')
+        return
+      }
+      const missing = resolved.filter((m) => !m.id).map((m) => m.name)
+      if (missing.length) {
+        setError(
+          `Not in inventory: ${missing.join(', ')}. Use Find alternatives or fix the name.`,
+        )
+        return
+      }
+      const res = await sellMedicines(token, resolved, { patient, doctor, clinic })
       setInvoice(res.invoice)
       setStatus(
         res.invoice.sale_id
@@ -168,7 +198,7 @@ export function OcrInvoicePage() {
                   value={line.name}
                   onChange={(e) => {
                     const next = [...lines]
-                    next[idx] = { ...line, name: e.target.value }
+                    next[idx] = { ...line, name: e.target.value, medicineId: undefined }
                     setLines(next)
                   }}
                 />
@@ -243,7 +273,9 @@ export function OcrInvoicePage() {
                           onClick={() =>
                             setLines((prev) =>
                               prev.map((l) =>
-                                l.name.trim() === name ? { ...l, name: r.name } : l,
+                                lineKey(l.name) === lineKey(name)
+                                  ? { ...l, name: r.name, medicineId: r.medicine_id }
+                                  : l,
                               ),
                             )
                           }
