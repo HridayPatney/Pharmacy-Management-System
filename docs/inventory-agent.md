@@ -2,6 +2,8 @@
 
 Natural-language questions over inventory and sales.
 
+System context: [architecture.md](architecture.md) (see “Inventory chat agent” sequence).
+
 ## Architecture (placement-scale)
 
 Inspired by common NL-to-SQL evolution (tool agent → few-shot SQL agent with gates):
