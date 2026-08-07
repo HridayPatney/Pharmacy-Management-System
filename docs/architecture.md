@@ -5,6 +5,7 @@ PharmaAssist is a pharmacy operations stack: **React staff UI** → **FastAPI** 
 & chat planning, and optional **S3** prescription storage.
 
 For env vars see [environment.md](environment.md). For deploy see [deployment.md](deployment.md).
+For interview prep (pitch, rebuttals, Q&A) see [interview.md](interview.md).
 
 ## System overview
 

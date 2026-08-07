@@ -123,6 +123,7 @@ tests/            pytest suite
 ## Documentation
 
 - [System architecture](docs/architecture.md) — diagrams, services, request flows
+- [Interview guide](docs/interview.md) — what to explain, rebuttals, Q&A
 - [Environment variables & secrets](docs/environment.md)
 - [Authentication & roles](docs/auth.md)
 - [Deployment (Render + Postgres + S3)](docs/deployment.md)
