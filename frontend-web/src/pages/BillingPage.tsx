@@ -4,16 +4,17 @@ import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { InvoicePanel } from '../components/InvoicePanel'
 import { downloadInvoicePdf } from '../lib/invoicePdf'
+import {
+  medicineKey,
+  mergeMedicineCatalogs,
+  resolveSellLines,
+} from '../lib/inventoryResolve'
 import type { Invoice, Medicine, Sale, SearchResult } from '../types/api'
 
 interface LineItem {
   name: string
   quantity: number
   medicineId?: string
-}
-
-function lineKey(name: string): string {
-  return name.trim().toLowerCase()
 }
 
 export function BillingPage() {
@@ -33,7 +34,7 @@ export function BillingPage() {
 
   const stockByName = useMemo(() => {
     const map = new Map<string, Medicine>()
-    for (const m of inventory) map.set(m.name.toLowerCase(), m)
+    for (const m of inventory) map.set(medicineKey(m.name), m)
     return map
   }, [inventory])
 
@@ -68,13 +69,13 @@ export function BillingPage() {
     try {
       const items = await refreshInventory()
       const map = new Map<string, Medicine>()
-      for (const m of items) map.set(m.name.toLowerCase(), m)
+      for (const m of items) map.set(medicineKey(m.name), m)
 
       const nextAlts: Record<string, SearchResult[]> = {}
       for (const line of lines) {
         const name = line.name.trim()
         if (!name) continue
-        const stock = map.get(name.toLowerCase())
+        const stock = map.get(medicineKey(name))
         if (!stock || stock.quantity < line.quantity) {
           try {
             nextAlts[name] = await searchSimilar(token, name, 8)
@@ -106,26 +107,25 @@ export function BillingPage() {
     setError(null)
     setStatus(null)
     try {
-      const items = await listAllMedicines(token)
-      const byId = new Map<string, Medicine>()
-      const byName = new Map<string, Medicine>()
-      for (const m of items) {
-        byId.set(m.id, m)
-        byName.set(m.name.toLowerCase(), m)
+      // Stamp ids from the same map the stock badge uses, then enrich from API.
+      const preset = lines.map((l) => {
+        const stock = stockByName.get(medicineKey(l.name))
+        return {
+          ...l,
+          medicineId: l.medicineId ?? stock?.id,
+          name: stock?.name ?? l.name,
+        }
+      })
+
+      const fresh = await refreshInventory()
+      let all: Medicine[] = []
+      try {
+        all = await listAllMedicines(token)
+      } catch {
+        all = []
       }
-      const medicines = lines
-        .map((l) => {
-          const trimmed = l.name.trim()
-          const stock =
-            (l.medicineId ? byId.get(l.medicineId) : undefined) ??
-            byName.get(trimmed.toLowerCase())
-          return {
-            id: stock?.id,
-            name: stock?.name ?? trimmed,
-            quantity: l.quantity,
-          }
-        })
-        .filter((l) => l.name && l.quantity > 0)
+      const catalog = mergeMedicineCatalogs(inventory, fresh, all)
+      const medicines = resolveSellLines(preset, catalog)
       if (!medicines.length) {
         setError('Add at least one medicine line.')
         return
@@ -206,7 +206,7 @@ export function BillingPage() {
         <h2>Sale lines</h2>
         <form className="stack" onSubmit={(e) => void onSell(e)}>
           {lines.map((line, idx) => {
-            const stock = stockByName.get(line.name.trim().toLowerCase())
+            const stock = stockByName.get(medicineKey(line.name))
             return (
               <div className="row" key={idx}>
                 <label style={{ flex: 2 }}>
@@ -215,8 +215,10 @@ export function BillingPage() {
                     list="billing-meds"
                     value={line.name}
                     onChange={(e) => {
+                      const name = e.target.value
+                      const stock = stockByName.get(medicineKey(name))
                       const next = [...lines]
-                      next[idx] = { ...line, name: e.target.value, medicineId: undefined }
+                      next[idx] = { ...line, name, medicineId: stock?.id }
                       setLines(next)
                     }}
                     onFocus={() => void refreshInventory()}
@@ -237,9 +239,9 @@ export function BillingPage() {
                 </label>
                 <div>
                   {line.name.trim() ? (
-                    stock ? (
-                      <span className={stock.quantity >= line.quantity ? 'badge ok' : 'badge warn'}>
-                        stock {stock.quantity} · {stock.price.toFixed(2)}
+                    stock || line.medicineId ? (
+                      <span className={(stock?.quantity ?? 0) >= line.quantity ? 'badge ok' : 'badge warn'}>
+                        stock {stock?.quantity ?? '?'} · {stock ? stock.price.toFixed(2) : '—'}
                       </span>
                     ) : (
                       <span className="badge warn">not in inventory</span>
@@ -294,7 +296,7 @@ export function BillingPage() {
                 ) : (
                   <ul>
                     {results.map((r) => (
-                      <li key={r.name}>
+                      <li key={r.medicine_id || r.name}>
                         {r.name}
                         {r.quantity != null ? ` · stock ${r.quantity}` : ''}{' '}
                         <button
@@ -303,7 +305,7 @@ export function BillingPage() {
                           onClick={() =>
                             setLines((prev) =>
                               prev.map((l) =>
-                                lineKey(l.name) === lineKey(name)
+                                medicineKey(l.name) === medicineKey(name)
                                   ? { ...l, name: r.name, medicineId: r.medicine_id }
                                   : l,
                               ),
