@@ -34,6 +34,7 @@ pytest tests/test_search_similar.py tests/test_pgvector_unit.py -q
 | Auth / roles / audit | `tests/test_auth.py` |
 | Health, errors, pagination, S3/local OCR | `tests/test_api_polish.py` |
 | Inventory + transactional sell + vector sync failures | `tests/test_inventory_api.py` |
+| Pessimistic `SELECT FOR UPDATE` helpers | `tests/test_stock_lock.py` |
 | Similar search (inventory filter, stored-embedding path) | `tests/test_search_similar.py` |
 | Sales history / void | `tests/test_sales_api.py` |
 | Inventory agent | `tests/test_agent.py` |

@@ -14,6 +14,7 @@ from backend.db import models
 from backend.db.database import get_db
 from backend.schemas.sales import PaginatedSales, SaleOut, SaleSummary
 from backend.services.audit import write_audit
+from backend.services.stock_lock import lock_medicines_by_ids, lock_sale_by_id
 
 router = APIRouter()
 
@@ -120,12 +121,7 @@ def void_sale(
     user: models.User = Depends(require_roles(*STAFF_ROLES)),
 ):
     """Cancel a completed sale and restore stock for each line item."""
-    sale = (
-        db.query(models.Sale)
-        .options(joinedload(models.Sale.items))
-        .filter(models.Sale.id == sale_id)
-        .first()
-    )
+    sale = lock_sale_by_id(db, sale_id)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     if sale.status == STATUS_CANCELLED:
@@ -135,20 +131,26 @@ def void_sale(
     missing: list[str] = []
 
     try:
+        lookup_ids: list[str] = []
         for item in sale.items:
-            medicine = None
             if item.medicine_id:
-                medicine = (
-                    db.query(models.Medicine)
-                    .filter(models.Medicine.id == item.medicine_id)
-                    .first()
-                )
+                lookup_ids.append(item.medicine_id)
+                continue
+            named = (
+                db.query(models.Medicine)
+                .filter(models.Medicine.name == item.medicine_name)
+                .first()
+            )
+            if named is not None:
+                lookup_ids.append(named.id)
+
+        locked = lock_medicines_by_ids(db, lookup_ids)
+        by_name = {med.name: med for med in locked.values()}
+
+        for item in sale.items:
+            medicine = locked.get(item.medicine_id) if item.medicine_id else None
             if medicine is None:
-                medicine = (
-                    db.query(models.Medicine)
-                    .filter(models.Medicine.name == item.medicine_name)
-                    .first()
-                )
+                medicine = by_name.get(item.medicine_name)
             if medicine is None:
                 missing.append(item.medicine_name)
                 continue
