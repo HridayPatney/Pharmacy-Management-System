@@ -19,6 +19,7 @@ from backend.schemas.inventory import (
     SellResponse,
 )
 from backend.services.audit import write_audit
+from backend.services.stock_lock import lock_medicine_by_id, lock_medicines_by_ids
 from backend.services.vector_sync import (
     schedule_medicine_embedding_fetch,
     schedule_remove_medicine_embedding,
@@ -134,7 +135,7 @@ def delete_medicine(
     user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
 ):
     """Delete a medicine from the DB and remove its pgvector embedding."""
-    med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
+    med = lock_medicine_by_id(db, med_id)
     if not med:
         raise HTTPException(status_code=404, detail="Medicine not found")
 
@@ -163,7 +164,7 @@ def update_medicine(
     user: models.User = Depends(require_roles(*INVENTORY_WRITE_ROLES)),
 ):
     """Replace medicine fields; vector re-index runs in the background."""
-    med = db.query(models.Medicine).filter(models.Medicine.id == med_id).first()
+    med = lock_medicine_by_id(db, med_id)
     if not med:
         raise HTTPException(status_code=404, detail="Medicine not found")
 
@@ -193,7 +194,7 @@ def sell_medicines(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_roles(*STAFF_ROLES)),
 ):
-    """Decrement stock for all lines in one transaction and return an invoice."""
+    """Decrement stock for all lines in one locked transaction and return an invoice."""
     if not payload.medicines:
         raise HTTPException(status_code=400, detail="Sell request must include at least one medicine.")
 
@@ -202,6 +203,7 @@ def sell_medicines(
     planned: list[tuple[models.Medicine, int, str]] = []
 
     try:
+        resolved: list[tuple[str, int, str]] = []
         for item in payload.medicines:
             name = " ".join(item.name.strip().split())
             qty = item.quantity
@@ -227,12 +229,24 @@ def sell_medicines(
                     status_code=400,
                     detail=f"Medicine '{label}' not found in inventory.",
                 )
-            if medicine.quantity < qty:
+            resolved.append((medicine.id, qty, name or medicine.name))
+
+        locked = lock_medicines_by_ids(db, [mid for mid, _, _ in resolved])
+        remaining = {mid: med.quantity for mid, med in locked.items()}
+
+        for medicine_id, qty, label in resolved:
+            medicine = locked.get(medicine_id)
+            if medicine is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Medicine '{label}' not found in inventory.",
+                )
+            if remaining[medicine.id] < qty:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Insufficient stock for {medicine.name}.",
                 )
-
+            remaining[medicine.id] -= qty
             planned.append((medicine, qty, medicine.name))
 
         for medicine, qty, name in planned:

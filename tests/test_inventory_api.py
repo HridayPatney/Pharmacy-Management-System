@@ -146,6 +146,54 @@ def test_sell_rolls_back_when_insufficient_stock(
     assert by_name["Ibuprofen"] == 5
 
 
+def test_sell_rejects_second_cashier_when_last_unit_already_sold(
+    client, sample_medicine_payload, pharmacist_headers
+):
+    """Sequential stand-in for the last-unit race: after qty hits 0, the next sell fails."""
+    last_unit = {**sample_medicine_payload, "quantity": 1}
+    client.post("/inventory/add", json=last_unit, headers=pharmacist_headers)
+
+    first = client.post(
+        "/inventory/sell",
+        json={"medicines": [{"name": "Aspirin", "quantity": 1}]},
+        headers=pharmacist_headers,
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        "/inventory/sell",
+        json={"medicines": [{"name": "Aspirin", "quantity": 1}]},
+        headers=pharmacist_headers,
+    )
+    assert second.status_code == 400
+    assert "Insufficient stock" in second.json()["error"]["message"]
+
+    remaining = client.get("/inventory/all", headers=pharmacist_headers).json()[0]["quantity"]
+    assert remaining == 0
+
+
+def test_sell_rejects_duplicate_lines_that_exceed_stock(
+    client, sample_medicine_payload, pharmacist_headers
+):
+    """Two lines of the same SKU must not pass individually then oversell."""
+    last_unit = {**sample_medicine_payload, "quantity": 1}
+    client.post("/inventory/add", json=last_unit, headers=pharmacist_headers)
+
+    failed = client.post(
+        "/inventory/sell",
+        json={
+            "medicines": [
+                {"name": "Aspirin", "quantity": 1},
+                {"name": "Aspirin", "quantity": 1},
+            ]
+        },
+        headers=pharmacist_headers,
+    )
+    assert failed.status_code == 400
+    remaining = client.get("/inventory/all", headers=pharmacist_headers).json()[0]["quantity"]
+    assert remaining == 1
+
+
 def test_low_stock(client, sample_medicine_payload, pharmacist_headers):
     client.post("/inventory/add", json=sample_medicine_payload, headers=pharmacist_headers)
     low = client.get("/inventory/low-stock?threshold=25", headers=pharmacist_headers)

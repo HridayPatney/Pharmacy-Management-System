@@ -110,6 +110,14 @@ On **add**, **update**, and **delete**:
 
 **Sell** only changes SQL quantities (and writes `sales` / `sale_items`) in one transaction. Embeddings are unchanged (they store semantic text, not stock). Stock 0/low does **not** recompute embeddings — quantity is a search filter only.
 
+Stock mutations take **pessimistic row locks** (`SELECT … FOR UPDATE`, refresh ORM via `populate_existing`):
+
+- **Sell** — lock every cart medicine in `id` order, then re-check quantity (so two cashiers cannot both take the last unit).
+- **Void** — lock the sale row first (blocks double-void), then lock medicines in `id` order before restoring qty.
+- **Update / delete** — lock the medicine row so a concurrent sell cannot lose its decrement.
+
+SQLite ignores `FOR UPDATE`; production Postgres enforces it. Locking by sorted `id` avoids multi-item deadlocks.
+
 | Outcome | Behavior |
 |---------|----------|
 | SQL commit fails | Request fails |
@@ -165,7 +173,8 @@ sequenceDiagram
 
   UI->>Sell: medicines[{id?, name, qty}] + patient/doctor/clinic
   Sell->>SQL: match by id or case-insensitive name
-  Sell->>SQL: decrement + Sale + SaleItem + audit (one txn)
+  Sell->>SQL: SELECT medicines FOR UPDATE (id order)
+  Sell->>SQL: re-check qty, decrement + Sale + SaleItem + audit (one txn)
   Sell-->>UI: invoice {items, total, timestamp, sale_id}
   UI->>Hist: list / void as needed
 ```
