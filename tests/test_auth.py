@@ -12,6 +12,77 @@ def test_login_and_me(client, admin_headers):
     assert me.json()["role"] == "admin"
 
 
+def test_login_sets_refresh_cookie(client):
+    from backend.core.security import REFRESH_COOKIE_NAME, hash_password
+    from backend.db import models
+    from backend.db.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.add(
+            models.User(
+                email="cookie@test.com",
+                hashed_password=hash_password("cookiepass1"),
+                role="admin",
+                is_active=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    logged = client.post(
+        "/auth/login",
+        json={"email": "cookie@test.com", "password": "cookiepass1"},
+    )
+    assert logged.status_code == 200
+    body = logged.json()
+    assert body["access_token"]
+    assert body["expires_in"] > 0
+    assert REFRESH_COOKIE_NAME in logged.cookies
+    assert "refresh_token" not in body
+    set_cookie = logged.headers.get("set-cookie", "").lower()
+    assert "samesite=none" in set_cookie
+    assert "httponly" in set_cookie
+    assert "secure" in set_cookie
+
+
+def test_refresh_rotates_cookie_and_access_token(client, admin_headers):
+    from backend.core.security import REFRESH_COOKIE_NAME
+
+    first = client.post("/auth/refresh")
+    assert first.status_code == 200
+    token = first.json()["access_token"]
+    assert token
+    assert token != admin_headers["Authorization"].split(" ", 1)[1]
+
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["email"] == "admin@test.com"
+
+    old_raw = first.cookies.get(REFRESH_COOKIE_NAME)
+    second = client.post("/auth/refresh")
+    assert second.status_code == 200
+    assert second.json()["access_token"] != token
+
+    if old_raw:
+        client.cookies.set(REFRESH_COOKIE_NAME, old_raw, path="/auth")
+        reused = client.post("/auth/refresh")
+        assert reused.status_code == 401
+
+
+def test_refresh_without_cookie_unauthorized(client):
+    assert client.post("/auth/refresh").status_code == 401
+
+
+def test_logout_revokes_refresh_cookie(client, admin_headers):
+    assert client.post("/auth/logout").status_code == 204
+    assert client.post("/auth/refresh").status_code == 401
+    # Access JWT still works until it expires (logout is refresh-side).
+    me = client.get("/auth/me", headers=admin_headers)
+    assert me.status_code == 200
+
+
 def test_bad_login(client, admin_headers):
     # admin_headers ensures user exists
     bad = client.post(

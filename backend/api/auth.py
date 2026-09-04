@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session, joinedload
 
+from backend.core.config import get_cookie_samesite, get_cookie_secure, get_jwt_expire_minutes, get_refresh_expire_days
 from backend.core.deps import get_current_user, require_roles
 from backend.core.roles import Role
-from backend.core.security import create_access_token, hash_password, verify_password
+from backend.core.security import (
+    REFRESH_COOKIE_NAME,
+    REFRESH_COOKIE_PATH,
+    create_access_token,
+    hash_password,
+    verify_password,
+)
 from backend.db import models
 from backend.db.database import get_db
 from backend.schemas.auth import (
@@ -21,8 +29,62 @@ from backend.schemas.auth import (
     UserUpdateRequest,
 )
 from backend.services.audit import write_audit
+from backend.services.refresh_tokens import (
+    RefreshError,
+    issue_refresh_token,
+    revoke_refresh_token,
+    rotate_refresh_token,
+)
 
 router = APIRouter()
+
+
+def _cookie_flags() -> tuple[Literal["lax", "strict", "none"], bool]:
+    """Flags for the refresh cookie.
+
+    Default is ``SameSite=None; Secure`` so the cookie is sent from a separate
+    SPA origin (Vite on another port, or Render static site + API).
+    """
+    configured = get_cookie_samesite()
+    samesite: Literal["lax", "strict", "none"] = (
+        configured if configured in ("lax", "strict", "none") else "none"
+    )
+    if samesite == "none":
+        return samesite, True
+    secure_override = get_cookie_secure()
+    return samesite, bool(secure_override)
+
+
+def _set_refresh_cookie(response: Response, raw: str) -> None:
+    samesite, secure = _cookie_flags()
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=raw,
+        max_age=get_refresh_expire_days() * 86400,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    samesite, secure = _cookie_flags()
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+    )
+
+
+def _token_response(user: models.User) -> TokenResponse:
+    return TokenResponse(
+        access_token=create_access_token(subject=str(user.id), role=user.role),
+        expires_in=get_jwt_expire_minutes() * 60,
+        user=UserOut.model_validate(user),
+    )
 
 
 def _active_admin_count(db: Session) -> int:
@@ -45,16 +107,55 @@ def _ensure_not_last_active_admin(db: Session, target: models.User, *, new_role:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    """Exchange email/password for a JWT access token."""
+def login(
+    payload: LoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Exchange email/password for a short-lived JWT and an httpOnly refresh cookie."""
     user = db.query(models.User).filter(models.User.email == payload.email.lower()).first()
     if not user or not user.is_active or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
-    token = create_access_token(subject=str(user.id), role=user.role)
-    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+    raw_refresh, _ = issue_refresh_token(db, user)
+    db.commit()
+    _set_refresh_cookie(response, raw_refresh)
+    return _token_response(user)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Rotate the refresh cookie and return a new access JWT."""
+    raw = request.cookies.get(REFRESH_COOKIE_NAME)
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    try:
+        user, new_raw = rotate_refresh_token(db, raw)
+        db.commit()
+    except RefreshError:
+        db.commit()
+        _clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        ) from None
+    _set_refresh_cookie(response, new_raw)
+    return _token_response(user)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Revoke the current refresh token and clear the cookie."""
+    raw = request.cookies.get(REFRESH_COOKIE_NAME)
+    if raw:
+        revoke_refresh_token(db, raw)
+        db.commit()
+    _clear_refresh_cookie(response)
 
 
 @router.get("/me", response_model=UserOut)

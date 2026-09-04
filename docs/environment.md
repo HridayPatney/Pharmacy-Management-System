@@ -7,7 +7,10 @@ PharmaAssist loads configuration from the process environment and optionally fro
 | Name | Required | Default | Purpose |
 |------|----------|---------|---------|
 | `JWT_SECRET` | Yes | _(none)_ | Signs access tokens |
-| `JWT_EXPIRE_MINUTES` | No | `60` | Access token lifetime |
+| `JWT_EXPIRE_MINUTES` | No | `15` | Access JWT lifetime |
+| `REFRESH_EXPIRE_DAYS` | No | `7` | Refresh-cookie lifetime |
+| `COOKIE_SAMESITE` | No | `none` | Override only; code default is `none` for split SPA + API |
+| `COOKIE_SECURE` | No | on when SameSite is `none` | Override the `Secure` flag |
 | `BOOTSTRAP_ADMIN_EMAIL` | First boot | _(none)_ | Seed admin when users table empty |
 | `BOOTSTRAP_ADMIN_PASSWORD` | First boot | _(none)_ | Seed admin password |
 | `GEMINI_API_KEY` | Yes for OCR / agent NL planning | _(none)_ | Gemini key for `POST /ocr/extract` and inventory chat planning |

@@ -8,14 +8,20 @@ import { LoginPage } from '../pages/LoginPage'
 vi.mock('../api/pharmacy', () => ({
   login: vi.fn(),
   fetchMe: vi.fn(),
+  refreshSession: vi.fn(),
+  logoutSession: vi.fn(),
 }))
 
-import { login as apiLogin } from '../api/pharmacy'
+import { login as apiLogin, logoutSession, refreshSession } from '../api/pharmacy'
 
 describe('LoginPage', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.mocked(apiLogin).mockReset()
+    vi.mocked(refreshSession).mockReset()
+    vi.mocked(refreshSession).mockRejectedValue(new Error('no session'))
+    vi.mocked(logoutSession).mockReset()
+    vi.mocked(logoutSession).mockResolvedValue(undefined)
   })
 
   it('submits credentials to login API', async () => {
@@ -40,7 +46,7 @@ describe('LoginPage', () => {
       </MemoryRouter>,
     )
 
-    await user.type(screen.getByLabelText(/email/i), 'admin@test.com')
+    await user.type(await screen.findByLabelText(/email/i), 'admin@test.com')
     await user.type(screen.getByLabelText(/password/i), 'adminpass1')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 

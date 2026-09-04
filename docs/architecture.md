@@ -140,8 +140,9 @@ sequenceDiagram
 
   UI->>API: email + password
   API->>DB: verify hash
-  API-->>UI: access_token + user
-  Note over UI: Authorization Bearer on later calls
+  API->>DB: store hashed refresh token
+  API-->>UI: access_token + Set-Cookie (httpOnly refresh)
+  Note over UI: Access JWT in memory; refresh cookie used on /auth/refresh
 ```
 
 ### 2. Inventory CRUD + index
@@ -254,7 +255,7 @@ sequenceDiagram
 | Prefix | Purpose |
 |--------|---------|
 | `GET /`, `/health/live`, `/health/ready` | Liveness / readiness |
-| `/auth` | Login, me, users, register, audit |
+| `/auth` | Login, refresh, logout, me, users, register, audit |
 | `/inventory` | CRUD, low-stock, **sell** |
 | `/sales` | Summary, history, void |
 | `/search` | Similar, reindex |
@@ -265,7 +266,9 @@ sequenceDiagram
 
 | Method | Path | Notes |
 |--------|------|--------|
-| POST | `/auth/login` | → `{ access_token, user }` |
+| POST | `/auth/login` | → `{ access_token, expires_in, user }` + httpOnly refresh cookie |
+| POST | `/auth/refresh` | Cookie → new access JWT; rotates refresh cookie |
+| POST | `/auth/logout` | Revokes refresh token and clears cookie |
 | GET | `/inventory/?page&limit&q…` | Paginated list |
 | GET | `/inventory/all` | Full list (compat) |
 | POST | `/inventory/sell` | `{ medicines: [{ id?, name, quantity }], patient?, doctor?, clinic? }` → invoice |

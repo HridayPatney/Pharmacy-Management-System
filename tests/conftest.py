@@ -131,7 +131,7 @@ def client(tmp_path, monkeypatch, vector_mocks):
 
     from fastapi.testclient import TestClient
 
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client
 
     database.Base.metadata.drop_all(bind=database.engine, tables=tables)

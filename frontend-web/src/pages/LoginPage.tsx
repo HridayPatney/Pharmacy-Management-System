@@ -10,7 +10,15 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (!loading && user) return <Navigate to="/inventory" replace />
+  if (loading) {
+    return (
+      <div className="login-page">
+        <div className="panel">Loading session…</div>
+      </div>
+    )
+  }
+
+  if (user) return <Navigate to="/inventory" replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

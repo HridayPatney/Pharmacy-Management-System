@@ -3,14 +3,17 @@
 Target architecture for PharmaAssist:
 
 ```text
-Browser / React (frontend-web)
-        │  HTTPS + Bearer JWT
+Browser / React  (Render Static Site)
+        │  HTTPS + Bearer access JWT
+        │  httpOnly refresh cookie (SameSite=None; Secure)
         ▼
-Render Web Service  (FastAPI; embeddings via pgvector)
+Render Web Service  (FastAPI)
         │
         ├── Render Postgres  (DATABASE_URL + pgvector)
         └── AWS S3           (prescriptions when STORAGE_BACKEND=s3)
 ```
+
+`*.onrender.com` is a public suffix, so the static site and API are **cross-site**. The refresh cookie is set in code as `SameSite=None; Secure; HttpOnly`, which is what browsers require for that split.
 
 For services, API prefixes, and end-to-end request flows (login, sell, similar-search,
 OCR, agent), see **[architecture.md](architecture.md)**.
@@ -41,7 +44,7 @@ OCR, agent), see **[architecture.md](architecture.md)**.
 | `BOOTSTRAP_ADMIN_EMAIL` | First admin (only when users table empty) |
 | `BOOTSTRAP_ADMIN_PASSWORD` | First admin password |
 | `GEMINI_API_KEY` | OCR + inventory chat planning |
-| `CORS_ORIGINS` | Your React frontend origin(s) |
+| `CORS_ORIGINS` | Exact static-site origin, e.g. `https://your-app.onrender.com` (no trailing slash, not `*`) |
 
 Remove unused `CHROMA_PATH` / disk mounts if present from older deploys.
 
@@ -68,6 +71,19 @@ Remove unused `CHROMA_PATH` / disk mounts if present from older deploys.
 | `S3_ENDPOINT_URL` | Optional (R2 / MinIO) |
 
 `POST /ocr/extract` stores the image then returns OCR fields plus `file_key`.
+
+## 2b. Render Static Site (`frontend-web`)
+
+1. New **Static Site** from the same repo.
+2. Root directory: `frontend-web`.
+3. Build: `npm install && npm run build`. Publish directory: `dist`.
+4. Set **build-time** env (Vite inlines this; rebuild after changing it):
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_API_URL` | Backend URL, e.g. `https://your-api.onrender.com` (no trailing slash) |
+
+The static site origin must match `CORS_ORIGINS` on the API **exactly**, including `https://`.
 
 ## 3. First deploy checklist
 

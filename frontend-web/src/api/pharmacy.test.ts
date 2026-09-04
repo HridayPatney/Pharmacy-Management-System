@@ -25,6 +25,7 @@ describe('pharmacy API helpers', () => {
     expect(String(url)).toContain('q=asp')
     expect(String(url)).toContain('low_stock=10')
     expect(init.headers.Authorization).toBe('Bearer tok')
+    expect(init.credentials).toBe('include')
   })
 
   it('posts sell payload shape', async () => {
