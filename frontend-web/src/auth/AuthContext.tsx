@@ -7,10 +7,11 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { fetchMe, login as apiLogin } from '../api/pharmacy'
+import { fetchMe, login as apiLogin, logoutSession, refreshSession } from '../api/pharmacy'
+import { getAccessToken, setAccessToken, subscribeAccessToken } from './tokenStore'
 import type { User } from '../types/api'
 
-const TOKEN_KEY = 'pharmaassist_token'
+const LEGACY_TOKEN_KEY = 'pharmaassist_token'
 
 interface AuthState {
   token: string | null
@@ -24,25 +25,27 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
+  const [token, setToken] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(Boolean(localStorage.getItem(TOKEN_KEY)))
+  const [loading, setLoading] = useState(true)
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY)
+    void logoutSession().catch(() => {
+      /* cookie may already be gone */
+    })
+    setAccessToken(null)
     setToken(null)
     setUser(null)
   }, [])
 
   const refreshUser = useCallback(async () => {
-    const t = localStorage.getItem(TOKEN_KEY)
-    if (!t) {
+    const bearer = getAccessToken()
+    if (!bearer) {
       setLoading(false)
       return
     }
     try {
-      const me = await fetchMe(t)
-      setToken(t)
+      const me = await fetchMe(bearer)
       setUser(me)
     } catch {
       logout()
@@ -53,14 +56,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await apiLogin(email, password)
-    localStorage.setItem(TOKEN_KEY, res.access_token)
+    setAccessToken(res.access_token)
     setToken(res.access_token)
     setUser(res.user)
   }, [])
 
   useEffect(() => {
-    void refreshUser()
-  }, [refreshUser])
+    localStorage.removeItem(LEGACY_TOKEN_KEY)
+    return subscribeAccessToken(setToken)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const session = await refreshSession()
+        if (cancelled) return
+        setToken(session.access_token)
+        setUser(session.user)
+      } catch {
+        if (cancelled || getAccessToken()) return
+        setAccessToken(null)
+        setToken(null)
+        setUser(null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const value = useMemo(
     () => ({ token, user, loading, login, logout, refreshUser }),

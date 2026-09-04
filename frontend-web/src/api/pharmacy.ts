@@ -1,4 +1,5 @@
-import { apiForm, apiJson } from './client'
+import { apiForm, apiJson, requestRefresh } from './client'
+import { setAccessToken } from '../auth/tokenStore'
 import type {
   AgentQueryResponse,
   AuditLog,
@@ -14,11 +15,26 @@ import type {
   User,
 } from '../types/api'
 
-export function login(email: string, password: string) {
-  return apiJson<TokenResponse>('/auth/login', {
+export async function login(email: string, password: string) {
+  const res = await apiJson<TokenResponse>('/auth/login', {
     method: 'POST',
+    skipRefresh: true,
     body: JSON.stringify({ email, password }),
   })
+  setAccessToken(res.access_token)
+  return res
+}
+
+export function refreshSession() {
+  return requestRefresh()
+}
+
+export async function logoutSession() {
+  try {
+    await apiJson<void>('/auth/logout', { method: 'POST', skipRefresh: true })
+  } finally {
+    setAccessToken(null)
+  }
 }
 
 export function fetchMe(token: string) {

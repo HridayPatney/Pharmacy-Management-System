@@ -1,7 +1,10 @@
 # Authentication
 
-PharmaAssist uses **JWT Bearer** tokens and role-based access control.
-Primary UI: React `frontend-web` (sends `Authorization` on staff routes).
+PharmaAssist uses a **short-lived JWT access token** plus a **rotating refresh token**.
+Primary UI: React `frontend-web`.
+
+- **Access JWT** — sent as `Authorization: Bearer …` on staff routes. Held in **memory only** (never `localStorage`).
+- **Refresh token** — opaque, stored hashed in the database, sent only as an **httpOnly** cookie (`pharmaassist_refresh`). JavaScript cannot read it.
 
 System context: [architecture.md](architecture.md).
 
@@ -17,14 +20,16 @@ System context: [architecture.md](architecture.md).
 
 | Method | Path | Auth |
 |--------|------|------|
-| POST | `/auth/login` | Public |
-| GET | `/auth/me` | Any staff |
+| POST | `/auth/login` | Public. JSON: `{ access_token, expires_in, user }`. Sets refresh cookie. |
+| POST | `/auth/refresh` | Refresh cookie. Rotates cookie; returns a new access JWT. |
+| POST | `/auth/logout` | Refresh cookie. Revokes token and clears cookie. |
+| GET | `/auth/me` | Access JWT |
 | GET | `/auth/users` | Admin |
 | POST | `/auth/register` | Admin |
 | PATCH | `/auth/users/{id}` | Admin |
 | GET | `/auth/audit` | Admin |
 
-Inventory, sales, search, OCR, and agent routes require a valid Bearer token.
+Inventory, sales, search, OCR, and agent routes require a valid Bearer access token.
 
 ## Local setup
 
@@ -36,16 +41,26 @@ BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 BOOTSTRAP_ADMIN_PASSWORD=choose-a-strong-password
 ```
 
+Optional: `JWT_EXPIRE_MINUTES` (default 15), `REFRESH_EXPIRE_DAYS` (default 7).
+
 2. Start the API. On first boot with an empty `users` table, the bootstrap admin is created.
-3. Login:
+3. Login (use `-c` so curl stores the refresh cookie):
 
 ```bash
-curl -X POST http://localhost:8000/auth/login \
+curl -c cookies.txt -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"admin@example.com\",\"password\":\"choose-a-strong-password\"}"
 ```
 
 4. Call protected routes with `Authorization: Bearer <access_token>`.
+5. When the access token expires, `POST /auth/refresh` with the cookie (`curl -b cookies.txt`) returns a new JWT.
+
+The React app sends `credentials: include`, keeps the access token in memory, and calls `/auth/refresh` on boot and on 401.
+
+Cookie notes:
+
+- Set in code as `HttpOnly`, `Secure`, `SameSite=None`, `Path=/auth` so a separate SPA origin (Vite, or Render static site + API) can send the cookie.
+- Optional overrides: `COOKIE_SAMESITE` (`lax` / `strict` / `none`) and `COOKIE_SECURE`.
 
 ## Audit
 

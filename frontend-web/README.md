@@ -31,7 +31,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:8501
 ## Features
 
 - Dashboard with stock bar chart, SKU / low-stock / value metrics
-- Login (`POST /auth/login`) + Bearer token on all staff routes
+- Login (`POST /auth/login`) + in-memory access JWT; httpOnly refresh cookie; Bearer on staff routes
 - Inventory list with pagination / search / low-stock filter; add/update/delete for pharmacist & admin
 - Billing: counter sell, alternatives (similar search), sales history, void, **invoice PDF**
 - OCR upload → availability / alternatives → sell + PDF invoice

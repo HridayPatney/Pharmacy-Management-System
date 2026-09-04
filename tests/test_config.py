@@ -60,3 +60,15 @@ def test_jwt_secret_missing(monkeypatch):
     finally:
         monkeypatch.setenv("JWT_SECRET", "test-jwt-secret-not-for-production")
         config.get_jwt_secret.cache_clear()
+
+
+def test_jwt_expire_minutes_default(monkeypatch):
+    monkeypatch.delenv("JWT_EXPIRE_MINUTES", raising=False)
+    assert config.get_jwt_expire_minutes() == 15
+    monkeypatch.setenv("JWT_EXPIRE_MINUTES", "30")
+    assert config.get_jwt_expire_minutes() == 30
+
+
+def test_refresh_expire_days_default(monkeypatch):
+    monkeypatch.delenv("REFRESH_EXPIRE_DAYS", raising=False)
+    assert config.get_refresh_expire_days() == 7

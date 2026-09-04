@@ -54,11 +54,32 @@ class User(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     audit_logs = relationship("AuditLog", back_populates="user")
+    refresh_tokens = relationship(
+        "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     sales = relationship(
         "Sale",
         back_populates="cashier",
         foreign_keys="Sale.user_id",
     )
+
+
+class RefreshToken(Base):
+    """Hashed refresh token. The raw value is sent only as an httpOnly cookie."""
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+    replaced_by_id = Column(Integer, ForeignKey("refresh_tokens.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="refresh_tokens")
 
 
 class AuditLog(Base):

@@ -44,10 +44,11 @@ class UserOut(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """JWT login response."""
+    """Access JWT plus public user. Refresh token is an httpOnly cookie, not JSON."""
 
     access_token: str
     token_type: str = "bearer"
+    expires_in: int
     user: UserOut
 
 

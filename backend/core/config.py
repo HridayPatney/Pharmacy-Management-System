@@ -127,12 +127,42 @@ def get_jwt_secret() -> str:
 
 
 def get_jwt_expire_minutes() -> int:
-    """Access-token lifetime in minutes (default 60)."""
-    raw = _env("JWT_EXPIRE_MINUTES", "60") or "60"
+    """Access-token lifetime in minutes (default 15)."""
+    raw = _env("JWT_EXPIRE_MINUTES", "15") or "15"
     try:
         return max(1, int(raw))
     except ValueError:
-        return 60
+        return 15
+
+
+def get_refresh_expire_days() -> int:
+    """Refresh-token lifetime in days (default 7)."""
+    raw = _env("REFRESH_EXPIRE_DAYS", "7") or "7"
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 7
+
+
+def get_cookie_samesite() -> str | None:
+    """Optional SameSite override: ``lax``, ``strict``, or ``none``.
+
+    Unset means ``none`` (SPA and API are separate origins).
+    """
+    raw = (_env("COOKIE_SAMESITE") or "").lower()
+    if raw in {"lax", "strict", "none"}:
+        return raw
+    return None
+
+
+def get_cookie_secure() -> bool | None:
+    """Optional Secure override. Unset means on whenever SameSite is ``none``."""
+    raw = (_env("COOKIE_SECURE") or "").lower()
+    if raw in {"1", "true", "yes"}:
+        return True
+    if raw in {"0", "false", "no"}:
+        return False
+    return None
 
 
 def get_bootstrap_admin_email() -> str | None:
